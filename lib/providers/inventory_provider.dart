@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../models/product.dart';
 import '../models/category.dart';
+import '../models/consumption_log.dart';
 import '../services/database_service.dart';
 import '../services/notification_service.dart';
 
@@ -107,6 +108,23 @@ class InventoryProvider extends ChangeNotifier {
     final product = _products.firstWhere((p) => p.id == productId);
     final newStock = (product.currentStock - amount).clamp(0.0, double.infinity);
     await updateStock(productId, newStock);
+
+    // Log consumption for prediction
+    final log = ConsumptionLog(
+      id: _uuid.v4(),
+      productId: productId,
+      quantity: amount,
+    );
+    await _db.insertConsumptionLog(log);
+  }
+
+  Future<double?> getEstimatedDaysUntilEmpty(String productId) async {
+    final product = _products.firstWhere((p) => p.id == productId);
+    return _db.estimateDaysUntilEmpty(productId, product.currentStock);
+  }
+
+  Future<double> getAverageDailyConsumption(String productId) async {
+    return _db.getAverageDailyConsumption(productId);
   }
 
   Future<void> deleteProduct(String productId) async {

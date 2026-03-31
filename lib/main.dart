@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'providers/inventory_provider.dart';
 import 'providers/shopping_list_provider.dart';
 import 'providers/budget_provider.dart';
 import 'services/notification_service.dart';
 import 'screens/home/home_screen.dart';
+import 'screens/onboarding/onboarding_screen.dart';
 import 'utils/app_theme.dart';
 
 void main() async {
@@ -15,11 +17,17 @@ void main() async {
   await notificationService.initialize();
   await notificationService.requestPermissions();
 
-  runApp(const PedidApp());
+  // Check if onboarding is completed
+  final prefs = await SharedPreferences.getInstance();
+  final onboardingCompleted = prefs.getBool('onboarding_completed') ?? false;
+
+  runApp(PedidApp(showOnboarding: !onboardingCompleted));
 }
 
 class PedidApp extends StatelessWidget {
-  const PedidApp({super.key});
+  final bool showOnboarding;
+
+  const PedidApp({super.key, this.showOnboarding = false});
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +43,9 @@ class PedidApp extends StatelessWidget {
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
         themeMode: ThemeMode.system,
-        home: const HomeScreen(),
+        home: showOnboarding
+            ? const OnboardingScreen()
+            : const HomeScreen(),
       ),
     );
   }

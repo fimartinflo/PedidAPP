@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../providers/shopping_list_provider.dart';
 import '../../providers/inventory_provider.dart';
 import '../../providers/budget_provider.dart';
 import '../../models/shopping_list.dart';
 import '../../utils/app_theme.dart';
+import '../../widgets/empty_state.dart';
 
 class ShoppingListDetailScreen extends StatelessWidget {
   final String listId;
@@ -24,6 +26,11 @@ class ShoppingListDetailScreen extends StatelessWidget {
           appBar: AppBar(
             title: Text(list.name),
             actions: [
+              IconButton(
+                icon: const Icon(Icons.share),
+                tooltip: 'Compartir lista',
+                onPressed: () => _shareList(list, context),
+              ),
               if (list.status == ShoppingListStatus.active)
                 IconButton(
                   icon: const Icon(Icons.check_circle),
@@ -47,6 +54,44 @@ class ShoppingListDetailScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  void _shareList(ShoppingList list, BuildContext context) {
+    final inventory = context.read<InventoryProvider>();
+    final buffer = StringBuffer();
+    buffer.writeln('Lista: ${list.name}');
+    buffer.writeln('${'─' * 30}');
+
+    // Group items by category
+    final groupedItems = <String, List<dynamic>>{};
+    for (final item in list.items) {
+      final category = inventory.categories.firstWhere(
+        (c) => c.id == item.categoryId,
+        orElse: () => inventory.categories.last,
+      );
+      groupedItems.putIfAbsent(category.name, () => []).add(item);
+    }
+
+    for (final entry in groupedItems.entries) {
+      buffer.writeln('\n${entry.key}:');
+      for (final item in entry.value) {
+        final check = item.isPurchased ? '✓' : '○';
+        final price = item.estimatedPrice != null
+            ? ' - \$${item.estimatedPrice.toStringAsFixed(2)}'
+            : '';
+        buffer.writeln(
+            '  $check ${item.productName} (${item.quantity.toStringAsFixed(1)} ${item.unit})$price');
+      }
+    }
+
+    buffer.writeln('\n${'─' * 30}');
+    buffer.writeln(
+        'Total estimado: \$${list.totalEstimated.toStringAsFixed(2)}');
+    buffer.writeln(
+        'Progreso: ${list.purchasedItems}/${list.totalItems} productos');
+    buffer.writeln('\nEnviado desde PedidAPP');
+
+    SharePlus.instance.share(ShareParams(text: buffer.toString()));
   }
 
   Widget _buildSummary(ShoppingList list) {
@@ -94,23 +139,11 @@ class ShoppingListDetailScreen extends StatelessWidget {
   Widget _buildItemsList(BuildContext context, ShoppingList list,
       ShoppingListProvider provider) {
     if (list.items.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.shopping_bag_outlined,
-                size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            const Text('Lista vacia'),
-            const SizedBox(height: 8),
-            ElevatedButton.icon(
-              onPressed: () =>
-                  _showAddItemDialog(context, list.id, provider),
-              icon: const Icon(Icons.add),
-              label: const Text('Agregar producto'),
-            ),
-          ],
-        ),
+      return EmptyState(
+        icon: Icons.shopping_bag_outlined,
+        message: 'Lista vacia',
+        actionLabel: 'Agregar producto',
+        onAction: () => _showAddItemDialog(context, list.id, provider),
       );
     }
 

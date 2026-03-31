@@ -4,11 +4,17 @@ import '../../providers/inventory_provider.dart';
 import '../../providers/shopping_list_provider.dart';
 import '../../providers/budget_provider.dart';
 import '../../utils/app_theme.dart';
+import '../../widgets/category_avatar.dart';
+import '../../widgets/empty_state.dart';
+import '../../widgets/section_header.dart';
+import '../../widgets/stat_card.dart';
+import '../../widgets/stock_indicator.dart';
+import '../../widgets/global_search.dart';
 import '../inventory/inventory_screen.dart';
 import '../shopping_list/shopping_lists_screen.dart';
-import '../categories/categories_screen.dart';
 import '../budget/budget_screen.dart';
 import '../settings/settings_screen.dart';
+import '../history/history_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -90,10 +96,21 @@ class _DashboardView extends StatelessWidget {
         title: const Text('PedidAPP'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {
-              // TODO: show notifications history
-            },
+            icon: const Icon(Icons.search),
+            tooltip: 'Buscar',
+            onPressed: () => showSearch(
+              context: context,
+              delegate: GlobalSearchDelegate(),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: 'Historial de compras',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (context) => const HistoryScreen()),
+            ),
           ),
         ],
       ),
@@ -148,7 +165,7 @@ class _DashboardView extends StatelessWidget {
         return Row(
           children: [
             Expanded(
-              child: _StatCard(
+              child: StatCard(
                 icon: Icons.inventory_2,
                 label: 'Productos',
                 value: '${inventory.totalProducts}',
@@ -157,7 +174,7 @@ class _DashboardView extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: _StatCard(
+              child: StatCard(
                 icon: Icons.warning_amber,
                 label: 'Stock Bajo',
                 value: '${inventory.lowStockCount}',
@@ -170,7 +187,7 @@ class _DashboardView extends StatelessWidget {
             Expanded(
               child: Consumer<ShoppingListProvider>(
                 builder: (context, shopping, child) {
-                  return _StatCard(
+                  return StatCard(
                     icon: Icons.shopping_cart,
                     label: 'Listas',
                     value: '${shopping.activeLists.length}',
@@ -207,29 +224,21 @@ class _DashboardView extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Stock Bajo',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                TextButton.icon(
-                  onPressed: () async {
-                    final shopping = context.read<ShoppingListProvider>();
-                    await shopping.generateFromLowStock(lowStock);
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Lista de compras generada'),
-                        ),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.add_shopping_cart, size: 18),
-                  label: const Text('Crear lista'),
-                ),
-              ],
+            SectionHeader(
+              title: 'Stock Bajo',
+              actionLabel: 'Crear lista',
+              actionIcon: Icons.add_shopping_cart,
+              onAction: () async {
+                final shopping = context.read<ShoppingListProvider>();
+                await shopping.generateFromLowStock(lowStock);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Lista de compras generada'),
+                    ),
+                  );
+                }
+              },
             ),
             ...lowStock.take(5).map((product) {
               final category = inventory.categories.firstWhere(
@@ -238,31 +247,16 @@ class _DashboardView extends StatelessWidget {
               );
               return Card(
                 child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor:
-                        AppTheme.hexToColor(category.color).withAlpha(40),
-                    child: Icon(
-                      AppTheme.getIconByName(category.icon),
-                      color: AppTheme.hexToColor(category.color),
-                    ),
-                  ),
+                  leading: CategoryAvatar(category: category),
                   title: Text(product.name),
                   subtitle: Text(
                     'Stock: ${product.currentStock.toStringAsFixed(1)} ${product.unit}',
                   ),
-                  trailing: product.isOutOfStock
-                      ? const Chip(
-                          label: Text('Agotado',
-                              style: TextStyle(
-                                  color: Colors.white, fontSize: 12)),
-                          backgroundColor: AppTheme.errorColor,
-                        )
-                      : const Chip(
-                          label: Text('Bajo',
-                              style: TextStyle(
-                                  color: Colors.white, fontSize: 12)),
-                          backgroundColor: AppTheme.warningColor,
-                        ),
+                  trailing: StockIndicator(
+                    currentStock: product.currentStock,
+                    minimumStock: product.minimumStock,
+                    compact: true,
+                  ),
                 ),
               );
             }),
@@ -283,18 +277,14 @@ class _DashboardView extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Listas Activas',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
+            const SectionHeader(title: 'Listas Activas'),
             const SizedBox(height: 8),
             ...activeLists.take(3).map((list) {
               return Card(
                 child: ListTile(
                   leading: const CircleAvatar(
                     backgroundColor: AppTheme.accentColor,
-                    child:
-                        Icon(Icons.shopping_cart, color: Colors.white),
+                    child: Icon(Icons.shopping_cart, color: Colors.white),
                   ),
                   title: Text(list.name),
                   subtitle: LinearProgressIndicator(
@@ -323,10 +313,7 @@ class _DashboardView extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Presupuesto del Mes',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
+            const SectionHeader(title: 'Presupuesto del Mes'),
             const SizedBox(height: 8),
             Card(
               child: Padding(
@@ -377,47 +364,6 @@ class _DashboardView extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-
-  const _StatCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-            Text(
-              label,
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

@@ -19,6 +19,7 @@
 | **uuid** | Generación de IDs (UUID v4) |
 | **shared_preferences** | Configuración de usuario |
 | **permission_handler** | Permisos del sistema |
+| **share_plus** | Compartir listas por WhatsApp/SMS |
 
 ## Arquitectura
 
@@ -67,7 +68,8 @@ lib/
 │   │   ├── add_product_screen.dart    # Formulario agregar producto
 │   │   ├── inventory_screen.dart      # Lista de productos con filtros
 │   │   └── product_detail_screen.dart # Detalle y edición de producto
-│   ├── history/                       # (VACÍO - pendiente de implementar)
+│   ├── history/
+│   │   └── history_screen.dart        # Historial de compras completadas
 │   ├── settings/
 │   │   └── settings_screen.dart       # Ajustes (notificaciones, tema)
 │   └── shopping_list/
@@ -79,11 +81,20 @@ lib/
 ├── utils/                             # Utilidades
 │   ├── app_theme.dart                 # Tema Material 3, colores, mapeo de íconos
 │   └── constants.dart                 # Constantes, unidades, labels
-├── widgets/                           # (VACÍO - pendiente de extraer widgets)
+│   ├── onboarding/
+│   │   └── onboarding_screen.dart     # Pantalla de bienvenida (primera vez)
+├── widgets/                           # Widgets reutilizables
+│   ├── category_avatar.dart           # Avatar circular de categoría
+│   ├── empty_state.dart               # Estado vacío genérico
+│   ├── global_search.dart             # Búsqueda global (SearchDelegate)
+│   ├── product_card.dart              # Card de producto reutilizable
+│   ├── section_header.dart            # Encabezado de sección
+│   ├── stat_card.dart                 # Card de estadística
+│   └── stock_indicator.dart           # Indicador visual de stock
 └── l10n/                              # (VACÍO - pendiente de internacionalización)
 ```
 
-## Esquema de Base de Datos (SQLite v1)
+## Esquema de Base de Datos (SQLite v2)
 
 ```sql
 -- Categorías de productos (10 predefinidas al crear BD)
@@ -109,6 +120,10 @@ shopping_items (id TEXT PK, shoppingListId TEXT FK→shopping_lists,
 -- Presupuesto mensual
 monthly_budgets (id TEXT PK, year INTEGER, month INTEGER,
                  budgetAmount REAL, spentAmount REAL, UNIQUE(year, month))
+
+-- Logs de consumo (para predicción)
+consumption_logs (id TEXT PK, productId TEXT FK→products,
+                  quantity REAL, timestamp TEXT)
 ```
 
 ## Navegación
@@ -116,6 +131,8 @@ monthly_budgets (id TEXT PK, year INTEGER, month INTEGER,
 ```
 HomeScreen (Scaffold + BottomNavigationBar)
 ├── Tab 0: Dashboard (_DashboardView)
+│   ├── Búsqueda global (SearchDelegate)
+│   ├── Acceso a HistoryScreen (botón historial)
 │   ├── Stats cards (productos, stock bajo, listas)
 │   ├── Sección stock bajo → puede generar lista automática
 │   ├── Listas activas con progreso
@@ -330,17 +347,17 @@ Necesitas Flutter SDK, Android SDK y un emulador creado.
 
 ## Roadmap de Mejoras
 
-### Fase 1 - Funcionalidades Faltantes (Prioridad Alta)
-- [ ] Pantalla de historial de compras (`lib/screens/history/history_screen.dart`)
-- [ ] Widgets reutilizables (`lib/widgets/stock_indicator.dart`, `product_card.dart`, `empty_state.dart`, `category_avatar.dart`)
-- [ ] Gráficos de presupuesto con fl_chart (barras mensuales, pastel por categoría)
-- [ ] Conectar botón de notificaciones del Dashboard al historial
+### Fase 1 - Funcionalidades Faltantes (Completada v1.1.0)
+- [x] Pantalla de historial de compras (`lib/screens/history/history_screen.dart`)
+- [x] Widgets reutilizables (`lib/widgets/stock_indicator.dart`, `product_card.dart`, `empty_state.dart`, `category_avatar.dart`, `stat_card.dart`, `section_header.dart`)
+- [x] Gráficos de presupuesto con fl_chart (barras mensuales, pastel por categoría)
+- [x] Conectar botón del Dashboard al historial de compras
 
-### Fase 2 - Mejoras de UX (Prioridad Media)
-- [ ] Pantalla de onboarding para primera vez
-- [ ] Compartir lista de compras por WhatsApp/SMS (share_plus)
-- [ ] Búsqueda global en Dashboard
-- [ ] Predicción de consumo (estimar cuándo se agotará un producto)
+### Fase 2 - Mejoras de UX (Completada v1.1.0)
+- [x] Pantalla de onboarding para primera vez
+- [x] Compartir lista de compras por WhatsApp/SMS (share_plus)
+- [x] Búsqueda global en Dashboard (productos y listas)
+- [x] Predicción de consumo (estimar cuándo se agotará un producto)
 
 ### Fase 3 - Testing (Prioridad Media)
 - [ ] Tests unitarios para modelos (toMap, fromMap, copyWith, getters)
@@ -381,3 +398,19 @@ Necesitas Flutter SDK, Android SDK y un emulador creado.
 - Creado CLAUDE.md con documentación completa del proyecto
 - Guía paso a paso para probar en Android (emulador y dispositivo físico)
 - Roadmap de mejoras organizado en 4 fases
+
+### v1.1.0 (2026-03-31) - Fase 1 y 2: Features y UX
+**Fase 1 - Funcionalidades Faltantes:**
+- Pantalla de historial de compras con filtros (este mes, mes pasado, todas)
+- 7 widgets reutilizables: StockIndicator, ProductCard, EmptyState, CategoryAvatar, StatCard, SectionHeader, GlobalSearch
+- Gráficos de presupuesto con fl_chart: barras comparativas mensuales y pastel por categoría
+- Botón de historial en Dashboard conectado a HistoryScreen
+- Query `getSpendingByCategory()` en DatabaseService para gráficos
+
+**Fase 2 - Mejoras de UX:**
+- Pantalla de onboarding (4 slides) para primera vez, con SharedPreferences
+- Compartir lista de compras formateada por WhatsApp/SMS/etc (share_plus)
+- Búsqueda global en Dashboard (SearchDelegate) buscando en productos y listas
+- Predicción de consumo: tabla consumption_logs, consumo diario promedio, estimación días hasta agotamiento
+- DB migrada a v2 con tabla consumption_logs
+- Refactorizado home_screen.dart para usar widgets reutilizables

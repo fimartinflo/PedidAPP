@@ -5,6 +5,7 @@ import '../models/product.dart';
 import '../models/shopping_item.dart';
 import '../models/shopping_list.dart';
 import '../models/budget.dart';
+import '../models/consumption_log.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -24,8 +25,9 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -97,9 +99,33 @@ class DatabaseService {
       )
     ''');
 
+    await db.execute('''
+      CREATE TABLE consumption_logs (
+        id TEXT PRIMARY KEY,
+        productId TEXT NOT NULL,
+        quantity REAL NOT NULL,
+        timestamp TEXT NOT NULL,
+        FOREIGN KEY (productId) REFERENCES products(id) ON DELETE CASCADE
+      )
+    ''');
+
     // Insert default categories
     for (final category in Category.defaultCategories()) {
       await db.insert('categories', category.toMap());
+    }
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS consumption_logs (
+          id TEXT PRIMARY KEY,
+          productId TEXT NOT NULL,
+          quantity REAL NOT NULL,
+          timestamp TEXT NOT NULL,
+          FOREIGN KEY (productId) REFERENCES products(id) ON DELETE CASCADE
+        )
+      ''');
     }
   }
 
@@ -293,6 +319,80 @@ class DatabaseService {
     final db = await database;
     await db.update('monthly_budgets', {'spentAmount': spentAmount},
         where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ==================== CONSUMPTION LOGS ====================
+
+  Future<void> insertConsumptionLog(ConsumptionLog log) async {
+    final db = await database;
+    await db.insert('consumption_logs', log.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<ConsumptionLog>> getConsumptionLogs(String productId,
+      {int days = 30}) async {
+    final db = await database;
+    final since =
+        DateTime.now().subtract(Duration(days: days)).toIso8601String();
+    final maps = await db.query(
+      'consumption_logs',
+      where: 'productId = ? AND timestamp >= ?',
+      whereArgs: [productId, since],
+      orderBy: 'timestamp DESC',
+    );
+    return maps.map((m) => ConsumptionLog.fromMap(m)).toList();
+  }
+
+  Future<double> getAverageDailyConsumption(String productId,
+      {int days = 30}) async {
+    final db = await database;
+    final since =
+        DateTime.now().subtract(Duration(days: days)).toIso8601String();
+    final result = await db.rawQuery('''
+      SELECT COALESCE(SUM(quantity), 0) as total
+      FROM consumption_logs
+      WHERE productId = ? AND timestamp >= ?
+    ''', [productId, since]);
+
+    final totalConsumed = (result.first['total'] as num?)?.toDouble() ?? 0;
+    return totalConsumed / days;
+  }
+
+  Future<double?> estimateDaysUntilEmpty(
+      String productId, double currentStock) async {
+    final avgDaily = await getAverageDailyConsumption(productId);
+    if (avgDaily <= 0) return null;
+    return currentStock / avgDaily;
+  }
+
+  // ==================== SPENDING BY CATEGORY ====================
+
+  Future<Map<String, double>> getSpendingByCategory(
+      int year, int month) async {
+    final db = await database;
+    final results = await db.rawQuery('''
+      SELECT si.categoryId, SUM(
+        CASE WHEN si.actualPrice IS NOT NULL
+          THEN si.actualPrice * si.quantity
+          ELSE COALESCE(si.estimatedPrice, 0) * si.quantity
+        END
+      ) as total
+      FROM shopping_items si
+      INNER JOIN shopping_lists sl ON si.shoppingListId = sl.id
+      WHERE sl.status = 'completed'
+        AND sl.completedAt IS NOT NULL
+        AND CAST(strftime('%Y', sl.completedAt) AS INTEGER) = ?
+        AND CAST(strftime('%m', sl.completedAt) AS INTEGER) = ?
+        AND si.isPurchased = 1
+      GROUP BY si.categoryId
+    ''', [year, month]);
+
+    final map = <String, double>{};
+    for (final row in results) {
+      map[row['categoryId'] as String] =
+          (row['total'] as num?)?.toDouble() ?? 0;
+    }
+    return map;
   }
 
   // ==================== STATISTICS ====================

@@ -201,6 +201,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             ),
           ),
           const SizedBox(height: 16),
+          _buildConsumptionPrediction(product, inventory),
+          const SizedBox(height: 16),
           if (product.estimatedPrice != null)
             Card(
               child: ListTile(
@@ -223,6 +225,79 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             ),
         ],
       ),
+    );
+  }
+
+  Widget _buildConsumptionPrediction(product, InventoryProvider inventory) {
+    return FutureBuilder<List<double?>>(
+      future: Future.wait([
+        inventory.getEstimatedDaysUntilEmpty(product.id),
+        inventory.getAverageDailyConsumption(product.id),
+      ]),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox.shrink();
+
+        final daysUntilEmpty = snapshot.data![0];
+        final avgDaily = snapshot.data![1] ?? 0.0;
+
+        if (avgDaily <= 0) {
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Icon(Icons.trending_down, color: Colors.grey[400]),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Registra consumo para ver predicciones',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Prediccion de Consumo',
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _PredictionStat(
+                        icon: Icons.speed,
+                        label: 'Consumo diario',
+                        value:
+                            '${avgDaily.toStringAsFixed(2)} ${product.unit}/dia',
+                      ),
+                    ),
+                    if (daysUntilEmpty != null)
+                      Expanded(
+                        child: _PredictionStat(
+                          icon: Icons.event,
+                          label: 'Se agota en',
+                          value: daysUntilEmpty < 1
+                              ? 'Hoy'
+                              : '${daysUntilEmpty.toStringAsFixed(0)} dias',
+                          isWarning: daysUntilEmpty <= 7,
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -397,6 +472,47 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _PredictionStat extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final bool isWarning;
+
+  const _PredictionStat({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.isWarning = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon,
+            size: 20,
+            color: isWarning ? AppTheme.warningColor : AppTheme.primaryColor),
+        const SizedBox(width: 8),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label,
+                style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: isWarning ? AppTheme.warningColor : null,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
