@@ -1,0 +1,423 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../providers/inventory_provider.dart';
+import '../../providers/shopping_list_provider.dart';
+import '../../providers/budget_provider.dart';
+import '../../utils/app_theme.dart';
+import '../inventory/inventory_screen.dart';
+import '../shopping_list/shopping_lists_screen.dart';
+import '../categories/categories_screen.dart';
+import '../budget/budget_screen.dart';
+import '../settings/settings_screen.dart';
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  int _currentIndex = 0;
+
+  final List<Widget> _screens = const [
+    _DashboardView(),
+    InventoryScreen(),
+    ShoppingListsScreen(),
+    BudgetScreen(),
+    SettingsScreen(),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final inventory = context.read<InventoryProvider>();
+    final shopping = context.read<ShoppingListProvider>();
+    final budget = context.read<BudgetProvider>();
+
+    await Future.wait([
+      inventory.loadData(),
+      shopping.loadShoppingLists(),
+      budget.loadBudgets(),
+    ]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: _screens[_currentIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) => setState(() => _currentIndex = index),
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: 'Inicio',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.inventory_2),
+            label: 'Despensa',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.shopping_cart),
+            label: 'Compras',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.account_balance_wallet),
+            label: 'Presupuesto',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings),
+            label: 'Ajustes',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DashboardView extends StatelessWidget {
+  const _DashboardView();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('PedidAPP'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined),
+            onPressed: () {
+              // TODO: show notifications history
+            },
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await context.read<InventoryProvider>().loadData();
+          await context.read<ShoppingListProvider>().loadShoppingLists();
+          await context.read<BudgetProvider>().loadBudgets();
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildGreeting(),
+              const SizedBox(height: 16),
+              _buildStatsCards(context),
+              const SizedBox(height: 24),
+              _buildLowStockSection(context),
+              const SizedBox(height: 24),
+              _buildActiveListsSection(context),
+              const SizedBox(height: 24),
+              _buildBudgetSection(context),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGreeting() {
+    final hour = DateTime.now().hour;
+    String greeting;
+    if (hour < 12) {
+      greeting = 'Buenos dias';
+    } else if (hour < 18) {
+      greeting = 'Buenas tardes';
+    } else {
+      greeting = 'Buenas noches';
+    }
+
+    return Text(
+      greeting,
+      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+    );
+  }
+
+  Widget _buildStatsCards(BuildContext context) {
+    return Consumer<InventoryProvider>(
+      builder: (context, inventory, child) {
+        return Row(
+          children: [
+            Expanded(
+              child: _StatCard(
+                icon: Icons.inventory_2,
+                label: 'Productos',
+                value: '${inventory.totalProducts}',
+                color: AppTheme.primaryColor,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _StatCard(
+                icon: Icons.warning_amber,
+                label: 'Stock Bajo',
+                value: '${inventory.lowStockCount}',
+                color: inventory.lowStockCount > 0
+                    ? AppTheme.warningColor
+                    : AppTheme.successColor,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Consumer<ShoppingListProvider>(
+                builder: (context, shopping, child) {
+                  return _StatCard(
+                    icon: Icons.shopping_cart,
+                    label: 'Listas',
+                    value: '${shopping.activeLists.length}',
+                    color: AppTheme.accentColor,
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildLowStockSection(BuildContext context) {
+    return Consumer<InventoryProvider>(
+      builder: (context, inventory, child) {
+        final lowStock = inventory.lowStockProducts;
+        if (lowStock.isEmpty) {
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle, color: AppTheme.successColor),
+                  const SizedBox(width: 12),
+                  const Text('Tu despensa esta completa'),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Stock Bajo',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                TextButton.icon(
+                  onPressed: () async {
+                    final shopping = context.read<ShoppingListProvider>();
+                    await shopping.generateFromLowStock(lowStock);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Lista de compras generada'),
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.add_shopping_cart, size: 18),
+                  label: const Text('Crear lista'),
+                ),
+              ],
+            ),
+            ...lowStock.take(5).map((product) {
+              final category = inventory.categories.firstWhere(
+                (c) => c.id == product.categoryId,
+                orElse: () => inventory.categories.last,
+              );
+              return Card(
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor:
+                        AppTheme.hexToColor(category.color).withAlpha(40),
+                    child: Icon(
+                      AppTheme.getIconByName(category.icon),
+                      color: AppTheme.hexToColor(category.color),
+                    ),
+                  ),
+                  title: Text(product.name),
+                  subtitle: Text(
+                    'Stock: ${product.currentStock.toStringAsFixed(1)} ${product.unit}',
+                  ),
+                  trailing: product.isOutOfStock
+                      ? const Chip(
+                          label: Text('Agotado',
+                              style: TextStyle(
+                                  color: Colors.white, fontSize: 12)),
+                          backgroundColor: AppTheme.errorColor,
+                        )
+                      : const Chip(
+                          label: Text('Bajo',
+                              style: TextStyle(
+                                  color: Colors.white, fontSize: 12)),
+                          backgroundColor: AppTheme.warningColor,
+                        ),
+                ),
+              );
+            }),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildActiveListsSection(BuildContext context) {
+    return Consumer<ShoppingListProvider>(
+      builder: (context, shopping, child) {
+        final activeLists = shopping.activeLists;
+        if (activeLists.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Listas Activas',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            ...activeLists.take(3).map((list) {
+              return Card(
+                child: ListTile(
+                  leading: const CircleAvatar(
+                    backgroundColor: AppTheme.accentColor,
+                    child:
+                        Icon(Icons.shopping_cart, color: Colors.white),
+                  ),
+                  title: Text(list.name),
+                  subtitle: LinearProgressIndicator(
+                    value: list.progress,
+                    backgroundColor: Colors.grey[200],
+                  ),
+                  trailing: Text(
+                    '${list.purchasedItems}/${list.totalItems}',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              );
+            }),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildBudgetSection(BuildContext context) {
+    return Consumer<BudgetProvider>(
+      builder: (context, budget, child) {
+        final current = budget.currentBudget;
+        if (current == null) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Presupuesto del Mes',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Gastado: \$${current.spentAmount.toStringAsFixed(2)}',
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                        Text(
+                          'Limite: \$${current.budgetAmount.toStringAsFixed(2)}',
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: LinearProgressIndicator(
+                        value: (current.percentUsed / 100).clamp(0.0, 1.0),
+                        minHeight: 12,
+                        backgroundColor: Colors.grey[200],
+                        color: current.isOverBudget
+                            ? AppTheme.errorColor
+                            : current.percentUsed >= 80
+                                ? AppTheme.warningColor
+                                : AppTheme.successColor,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Disponible: \$${current.remainingAmount.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        color: current.isOverBudget
+                            ? AppTheme.errorColor
+                            : AppTheme.successColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  const _StatCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 28),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            Text(
+              label,
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

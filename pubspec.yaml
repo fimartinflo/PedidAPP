@@ -1,0 +1,47 @@
+name: pedidapp
+description: "PedidAPP - Organiza tus compras del hogar, controla tu stock y nunca olvides nada."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.6.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # State management
+  provider: ^6.1.2
+  # Local database
+  sqflite: ^2.4.1
+  path: ^1.9.0
+  # Notifications
+  flutter_local_notifications: ^18.0.1
+  # Date formatting
+  intl: ^0.19.0
+  # Charts for budget visualization
+  fl_chart: ^0.70.2
+  # UUID generation
+  uuid: ^4.5.1
+  # Shared preferences for settings
+  shared_preferences: ^2.3.4
+  # Icons
+  cupertino_icons: ^1.0.8
+  # Permission handling
+  permission_handler: ^11.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+
+  # fonts:
+  #   - family: Poppins
+  #     fonts:
+  #       - asset: assets/fonts/Poppins-Regular.ttf
+  #       - asset: assets/fonts/Poppins-Bold.ttf
+  #         weight: 700
