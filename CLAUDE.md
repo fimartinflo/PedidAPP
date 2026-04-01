@@ -92,6 +92,21 @@ lib/
 │   ├── stat_card.dart                 # Card de estadística
 │   └── stock_indicator.dart           # Indicador visual de stock
 └── l10n/                              # (VACÍO - pendiente de internacionalización)
+
+test/
+├── helpers/
+│   ├── fake_database_service.dart     # Fake in-memory de DatabaseService
+│   └── fake_notification_service.dart # Fake de NotificationService
+├── models/
+│   ├── budget_test.dart               # Tests MonthlyBudget
+│   ├── category_test.dart             # Tests Category
+│   ├── consumption_log_test.dart      # Tests ConsumptionLog
+│   ├── product_test.dart              # Tests Product
+│   └── shopping_list_test.dart        # Tests ShoppingItem y ShoppingList
+└── providers/
+    ├── budget_provider_test.dart       # Tests BudgetProvider
+    ├── inventory_provider_test.dart    # Tests InventoryProvider
+    └── shopping_list_provider_test.dart # Tests ShoppingListProvider
 ```
 
 ## Esquema de Base de Datos (SQLite v2)
@@ -359,11 +374,13 @@ Necesitas Flutter SDK, Android SDK y un emulador creado.
 - [x] Búsqueda global en Dashboard (productos y listas)
 - [x] Predicción de consumo (estimar cuándo se agotará un producto)
 
-### Fase 3 - Testing (Prioridad Media)
-- [ ] Tests unitarios para modelos (toMap, fromMap, copyWith, getters)
-- [ ] Tests unitarios para providers (con inyección de dependencias)
-- [ ] Tests de widgets para pantallas principales
-- [ ] Refactorizar providers para aceptar servicios por constructor
+### Fase 3 - Testing (Completada v1.2.0)
+- [x] Tests unitarios para modelos (toMap, fromMap, copyWith, getters)
+- [x] Tests unitarios para providers (con inyección de dependencias)
+- [x] Refactorizar providers para aceptar servicios por constructor
+- [x] Fakes de DatabaseService y NotificationService para testing
+- [x] Política de privacidad (PRIVACY_POLICY.md)
+- [ ] Tests de widgets para pantallas principales (requiere entorno Flutter)
 
 ### Fase 4 - Publicación (Prioridad Futura)
 - [ ] Generar configs nativos con `flutter create .`
@@ -371,7 +388,6 @@ Necesitas Flutter SDK, Android SDK y un emulador creado.
 - [ ] Configurar Info.plist para iOS
 - [ ] Ícono de app con flutter_launcher_icons
 - [ ] Splash screen con flutter_native_splash
-- [ ] Política de privacidad (PRIVACY_POLICY.md)
 - [ ] Firmar APK/AAB con keystore
 - [ ] Screenshots y descripción para tiendas
 - [ ] Publicar en Google Play Store
@@ -414,3 +430,14 @@ Necesitas Flutter SDK, Android SDK y un emulador creado.
 - Predicción de consumo: tabla consumption_logs, consumo diario promedio, estimación días hasta agotamiento
 - DB migrada a v2 con tabla consumption_logs
 - Refactorizado home_screen.dart para usar widgets reutilizables
+
+### v1.2.0 (2026-04-01) - Fase 3: Testing y Preparación
+**Testing:**
+- Tests unitarios para 5 modelos: Product, Category, MonthlyBudget, ShoppingItem/ShoppingList, ConsumptionLog
+- Tests unitarios para 3 providers: InventoryProvider, ShoppingListProvider, BudgetProvider
+- Refactorización de providers para inyección de dependencias (constructor injection)
+- Servicios testables: DatabaseService.forTesting() y NotificationService.forTesting()
+- FakeDatabaseService (in-memory) y FakeNotificationService para tests
+
+**Preparación para publicación:**
+- Política de privacidad (PRIVACY_POLICY.md)

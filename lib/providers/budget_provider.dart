@@ -5,9 +5,15 @@ import '../services/database_service.dart';
 import '../services/notification_service.dart';
 
 class BudgetProvider extends ChangeNotifier {
-  final DatabaseService _db = DatabaseService();
-  final NotificationService _notifications = NotificationService();
+  final DatabaseService _db;
+  final NotificationService _notifications;
   final Uuid _uuid = const Uuid();
+
+  BudgetProvider({
+    DatabaseService? db,
+    NotificationService? notifications,
+  })  : _db = db ?? DatabaseService(),
+        _notifications = notifications ?? NotificationService();
 
   List<MonthlyBudget> _budgets = [];
   MonthlyBudget? _currentBudget;
