@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../providers/theme_provider.dart';
 import '../../services/notification_service.dart';
 import '../../utils/app_theme.dart';
 import '../../utils/constants.dart';
@@ -14,7 +16,6 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
-  bool _darkMode = false;
 
   @override
   void initState() {
@@ -26,12 +27,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _notificationsEnabled = prefs.getBool('notifications_enabled') ?? true;
-      _darkMode = prefs.getBool('dark_mode') ?? false;
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
+
     return Scaffold(
       appBar: AppBar(title: const Text('Ajustes')),
       body: ListView(
@@ -51,12 +53,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SwitchListTile(
             title: const Text('Modo oscuro'),
             subtitle: const Text('Tema oscuro para la aplicacion'),
-            value: _darkMode,
-            onChanged: (value) async {
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setBool('dark_mode', value);
-              setState(() => _darkMode = value);
-            },
+            value: themeProvider.isDarkMode,
+            onChanged: (value) => themeProvider.toggleDarkMode(value),
             secondary: const Icon(Icons.dark_mode),
           ),
           const Divider(),

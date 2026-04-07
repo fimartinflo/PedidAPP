@@ -56,7 +56,8 @@ lib/
 ├── providers/                         # Gestión de estado
 │   ├── budget_provider.dart           # BudgetProvider - presupuesto y gastos
 │   ├── inventory_provider.dart        # InventoryProvider - productos y categorías
-│   └── shopping_list_provider.dart    # ShoppingListProvider - listas de compras
+│   ├── shopping_list_provider.dart    # ShoppingListProvider - listas de compras
+│   └── theme_provider.dart            # ThemeProvider - modo oscuro persistente
 ├── screens/                           # Pantallas organizadas por feature
 │   ├── budget/
 │   │   └── budget_screen.dart         # Control de presupuesto mensual
@@ -68,6 +69,8 @@ lib/
 │   │   ├── add_product_screen.dart    # Formulario agregar producto
 │   │   ├── inventory_screen.dart      # Lista de productos con filtros
 │   │   └── product_detail_screen.dart # Detalle y edición de producto
+│   ├── consumption/
+│   │   └── consumption_screen.dart    # Predicción y analytics de consumo
 │   ├── history/
 │   │   └── history_screen.dart        # Historial de compras completadas
 │   ├── settings/
@@ -147,6 +150,7 @@ consumption_logs (id TEXT PK, productId TEXT FK→products,
 HomeScreen (Scaffold + BottomNavigationBar)
 ├── Tab 0: Dashboard (_DashboardView)
 │   ├── Búsqueda global (SearchDelegate)
+│   ├── Acceso a ConsumptionScreen (botón predicción)
 │   ├── Acceso a HistoryScreen (botón historial)
 │   ├── Stats cards (productos, stock bajo, listas)
 │   ├── Sección stock bajo → puede generar lista automática
@@ -441,3 +445,17 @@ Necesitas Flutter SDK, Android SDK y un emulador creado.
 
 **Preparación para publicación:**
 - Política de privacidad (PRIVACY_POLICY.md)
+
+### v1.3.0 (2026-04-07) - Correcciones y Analytics
+**Correcciones de prioridad alta:**
+- Modo oscuro funcional con ThemeProvider y persistencia en SharedPreferences
+- Presupuesto conectado automáticamente al completar listas de compras
+- Diálogo de precio real al marcar item como comprado
+- Resumen de lista muestra "Gastado" en tiempo real
+- SnackBar de confirmación al completar lista con monto registrado
+
+**Nuevas funcionalidades:**
+- Pantalla de predicción de consumo (ConsumptionScreen) accesible desde Dashboard
+- Cards por producto con: consumo diario, días hasta agotarse, barra de stock
+- Chips de estado: OK, Bajo, Pronto, Critico, Agotado
+- Resumen general: total productos, stock bajo, agotados

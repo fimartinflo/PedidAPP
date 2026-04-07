@@ -15,6 +15,7 @@ import '../shopping_list/shopping_lists_screen.dart';
 import '../budget/budget_screen.dart';
 import '../settings/settings_screen.dart';
 import '../history/history_screen.dart';
+import '../consumption/consumption_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -101,6 +102,15 @@ class _DashboardView extends StatelessWidget {
             onPressed: () => showSearch(
               context: context,
               delegate: GlobalSearchDelegate(),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.trending_down),
+            tooltip: 'Prediccion de consumo',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (context) => const ConsumptionScreen()),
             ),
           ),
           IconButton(
