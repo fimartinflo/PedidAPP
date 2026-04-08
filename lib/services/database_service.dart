@@ -297,6 +297,17 @@ class DatabaseService {
         where: 'id = ?', whereArgs: [id]);
   }
 
+  Future<void> updateShoppingItemActualPrice(
+      String id, double actualPrice) async {
+    final db = await database;
+    await db.update(
+      'shopping_items',
+      {'actualPrice': actualPrice},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
   // ==================== BUDGETS ====================
 
   Future<List<MonthlyBudget>> getBudgets() async {

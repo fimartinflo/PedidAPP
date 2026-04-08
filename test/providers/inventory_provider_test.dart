@@ -196,4 +196,70 @@ void main() {
       expect(provider.categories.length, initialCount - 1);
     });
   });
+
+  group('InventoryProvider - product updates', () {
+    test('updateProduct persists changes', () async {
+      await provider.loadData();
+      await provider.addProduct(
+        name: 'Arroz Blanco',
+        categoryId: provider.categories.first.id,
+        currentStock: 5,
+        estimatedPrice: 2.00,
+      );
+
+      final product = provider.products.first;
+      final updated = product.copyWith(name: 'Arroz Integral', estimatedPrice: 3.50);
+      await provider.updateProduct(updated);
+
+      expect(provider.products.first.name, 'Arroz Integral');
+      expect(provider.products.first.estimatedPrice, 3.50);
+    });
+
+    test('getProductsByCategory returns only matching products', () async {
+      await provider.loadData();
+      final catA = provider.categories[0].id;
+      final catB = provider.categories[1].id;
+
+      await provider.addProduct(name: 'A1', categoryId: catA);
+      await provider.addProduct(name: 'A2', categoryId: catA);
+      await provider.addProduct(name: 'B1', categoryId: catB);
+
+      final resultsA = provider.getProductsByCategory(catA);
+      expect(resultsA.length, 2);
+      expect(resultsA.every((p) => p.categoryId == catA), true);
+    });
+
+    test('outOfStockProducts returns only zero-stock products', () async {
+      await provider.loadData();
+      final catId = provider.categories.first.id;
+
+      await provider.addProduct(
+        name: 'Disponible', categoryId: catId, currentStock: 3, minimumStock: 1);
+      await provider.addProduct(
+        name: 'Agotado', categoryId: catId, currentStock: 0, minimumStock: 2);
+
+      expect(provider.outOfStockProducts.length, 1);
+      expect(provider.outOfStockProducts.first.name, 'Agotado');
+    });
+
+    test('decrementStock logs consumption', () async {
+      await provider.loadData();
+      await provider.addProduct(
+        name: 'Jugo',
+        categoryId: provider.categories.first.id,
+        currentStock: 5,
+        minimumStock: 1,
+      );
+
+      final productId = provider.products.first.id;
+      await provider.decrementStock(productId, 2);
+
+      // Stock reduced
+      expect(provider.products.first.currentStock, 3);
+      // Consumption log inserted in fake DB
+      final logs = await fakeDb.getConsumptionLogs(productId);
+      expect(logs.length, 1);
+      expect(logs.first.quantity, 2);
+    });
+  });
 }

@@ -272,12 +272,15 @@ class ShoppingListDetailScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(ctx);
               final price = double.tryParse(priceController.text);
-              if (price != null) {
-                await provider.updateItemActualPrice(item.id, price);
+              try {
+                if (price != null) {
+                  await provider.updateItemActualPrice(item.id, price);
+                }
+                await provider.toggleItemPurchased(listId, item.id);
+              } finally {
+                if (ctx.mounted) Navigator.pop(ctx);
               }
-              await provider.toggleItemPurchased(listId, item.id);
             },
             child: const Text('Guardar'),
           ),

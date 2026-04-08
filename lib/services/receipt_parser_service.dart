@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
 /// Represents a single item parsed from a receipt.
@@ -76,6 +77,9 @@ class ReceiptParserService {
   }
 
   /// Tries to parse a single line into a ReceiptItem.
+  @visibleForTesting
+  ReceiptItem? parseLine(String line) => _parseLine(line);
+
   ReceiptItem? _parseLine(String line) {
     // Normalize whitespace
     line = line.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -232,6 +236,9 @@ class ReceiptParserService {
   }
 
   /// Extracts the total amount from receipt text.
+  @visibleForTesting
+  double? extractTotal(String text) => _extractTotal(text);
+
   double? _extractTotal(String text) {
     final totalMatch = RegExp(
       r'total\s*[\$:]?\s*(\d+[.,]\d{2})',

@@ -476,3 +476,15 @@ Necesitas Flutter SDK, Android SDK y un emulador creado.
 - Vista del texto OCR completo para referencia
 - Matching automático con productos existentes en inventario
 - Botón de escaneo en pantalla de Listas de Compras (FAB secundario)
+
+### v1.4.1 (2026-04-08) - Plan de Pruebas y Correcciones
+**Bugs corregidos:**
+- updateItemActualPrice: eliminado acceso raw DB en provider, movido a DatabaseService.updateShoppingItemActualPrice()
+- Race condition en _onToggleItem: precio real ahora se persiste antes de marcar item como comprado
+
+**Nuevos tests (plan de pruebas):**
+- 35 tests para ReceiptParserService: extracción de precios, cantidades, unidades, filtrado de headers/footers, extractTotal
+- Tests para updateItemActualPrice en ShoppingListProvider (precio real → totalActual)
+- Tests para generateFromLowStock (lista vacía, nombre personalizado)
+- Tests para completeList (completedAt timestamp)
+- Tests para updateProduct, getProductsByCategory, outOfStockProducts, decrementStock+consumptionLog en InventoryProvider

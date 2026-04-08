@@ -167,5 +167,67 @@ void main() {
         contains('showShoppingReminder:Recordatorio'),
       );
     });
+
+    test('updateItemActualPrice persists price to item', () async {
+      final list = await provider.createShoppingList(name: 'Test');
+      await provider.addItemToList(
+        listId: list.id,
+        productId: 'p1',
+        productName: 'Leche',
+        categoryId: 'c1',
+        estimatedPrice: 1.00,
+      );
+      await provider.loadShoppingLists();
+
+      final itemId = provider.shoppingLists.first.items.first.id;
+      await provider.updateItemActualPrice(itemId, 1.25);
+
+      final updatedItem = provider.shoppingLists.first.items.first;
+      expect(updatedItem.actualPrice, 1.25);
+    });
+
+    test('updateItemActualPrice affects totalActual on list', () async {
+      final list = await provider.createShoppingList(name: 'Total Test');
+      await provider.addItemToList(
+        listId: list.id,
+        productId: 'p1',
+        productName: 'Pan',
+        categoryId: 'c1',
+        quantity: 2,
+        estimatedPrice: 3.00,
+      );
+      await provider.loadShoppingLists();
+
+      final itemId = provider.shoppingLists.first.items.first.id;
+      await provider.updateItemActualPrice(itemId, 4.00);
+
+      // totalActual should use actualPrice * quantity = 4.00 * 2 = 8.00
+      expect(provider.shoppingLists.first.totalActual, 8.00);
+    });
+
+    test('generateFromLowStock with empty list creates empty list', () async {
+      final list = await provider.generateFromLowStock([]);
+      await provider.loadShoppingLists();
+
+      final found = provider.shoppingLists.firstWhere((l) => l.id == list.id);
+      expect(found.items, isEmpty);
+    });
+
+    test('generateFromLowStock respects custom name', () async {
+      final list = await provider.generateFromLowStock(
+        [],
+        name: 'Mi Lista Custom',
+      );
+      expect(list.name, 'Mi Lista Custom');
+    });
+
+    test('completeList sets completedAt timestamp', () async {
+      final list = await provider.createShoppingList(name: 'Test');
+      await provider.completeList(list.id);
+      await provider.loadShoppingLists();
+
+      final completed = provider.shoppingLists.firstWhere((l) => l.id == list.id);
+      expect(completed.completedAt, isNotNull);
+    });
   });
 }

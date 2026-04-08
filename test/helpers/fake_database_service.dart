@@ -178,6 +178,28 @@ class FakeDatabaseService extends DatabaseService {
     }
   }
 
+  @override
+  Future<void> updateShoppingItemActualPrice(
+      String id, double actualPrice) async {
+    final idx = _shoppingItems.indexWhere((i) => i.id == id);
+    if (idx != -1) {
+      final item = _shoppingItems[idx];
+      _shoppingItems[idx] = ShoppingItem(
+        id: item.id,
+        shoppingListId: item.shoppingListId,
+        productId: item.productId,
+        productName: item.productName,
+        categoryId: item.categoryId,
+        quantity: item.quantity,
+        unit: item.unit,
+        estimatedPrice: item.estimatedPrice,
+        isPurchased: item.isPurchased,
+        actualPrice: actualPrice,
+        notes: item.notes,
+      );
+    }
+  }
+
   // ==================== BUDGETS ====================
 
   @override

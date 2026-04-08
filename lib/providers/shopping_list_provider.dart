@@ -116,13 +116,7 @@ class ShoppingListProvider extends ChangeNotifier {
 
   Future<void> updateItemActualPrice(
       String itemId, double actualPrice) async {
-    final db = await _db.database;
-    await db.update(
-      'shopping_items',
-      {'actualPrice': actualPrice},
-      where: 'id = ?',
-      whereArgs: [itemId],
-    );
+    await _db.updateShoppingItemActualPrice(itemId, actualPrice);
     await loadShoppingLists();
   }
 
