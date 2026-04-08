@@ -6,6 +6,7 @@ import '../../providers/inventory_provider.dart';
 import '../../models/shopping_list.dart';
 import '../../utils/app_theme.dart';
 import 'shopping_list_detail_screen.dart';
+import 'scan_receipt_screen.dart';
 
 class ShoppingListsScreen extends StatelessWidget {
   const ShoppingListsScreen({super.key});
@@ -33,9 +34,27 @@ class ShoppingListsScreen extends StatelessWidget {
             _ListsView(showCompleted: true),
           ],
         ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: () => _showCreateDialog(context),
-          child: const Icon(Icons.add),
+        floatingActionButton: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FloatingActionButton.small(
+              heroTag: 'scan',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ScanReceiptScreen(),
+                ),
+              ),
+              tooltip: 'Escanear boleta',
+              child: const Icon(Icons.receipt_long),
+            ),
+            const SizedBox(height: 8),
+            FloatingActionButton(
+              heroTag: 'create',
+              onPressed: () => _showCreateDialog(context),
+              child: const Icon(Icons.add),
+            ),
+          ],
         ),
       ),
     );

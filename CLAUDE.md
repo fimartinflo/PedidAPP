@@ -20,6 +20,8 @@
 | **shared_preferences** | Configuración de usuario |
 | **permission_handler** | Permisos del sistema |
 | **share_plus** | Compartir listas por WhatsApp/SMS |
+| **image_picker** | Captura/selección de imágenes (cámara/galería) |
+| **google_mlkit_text_recognition** | OCR on-device para lectura de boletas |
 
 ## Arquitectura
 
@@ -76,11 +78,13 @@ lib/
 │   ├── settings/
 │   │   └── settings_screen.dart       # Ajustes (notificaciones, tema)
 │   └── shopping_list/
+│       ├── scan_receipt_screen.dart          # Escaneo de boletas con OCR
 │       ├── shopping_list_detail_screen.dart  # Items de una lista
 │       └── shopping_lists_screen.dart        # Listas activas/completadas
 ├── services/                          # Servicios singleton
 │   ├── database_service.dart          # SQLite CRUD completo (5 tablas)
-│   └── notification_service.dart      # Notificaciones locales
+│   ├── notification_service.dart      # Notificaciones locales
+│   └── receipt_parser_service.dart    # OCR y parseo de boletas de compra
 ├── utils/                             # Utilidades
 │   ├── app_theme.dart                 # Tema Material 3, colores, mapeo de íconos
 │   └── constants.dart                 # Constantes, unidades, labels
@@ -162,6 +166,7 @@ HomeScreen (Scaffold + BottomNavigationBar)
 │   └── AddProductScreen → formulario
 ├── Tab 2: Compras (ShoppingListsScreen)
 │   ├── Tab Activas / Tab Completadas
+│   ├── ScanReceiptScreen → escanear boleta con OCR, crear lista automática
 │   └── ShoppingListDetailScreen → marcar items, compartir
 ├── Tab 3: Presupuesto (BudgetScreen)
 │   ├── Presupuesto actual con indicador circular
@@ -459,3 +464,15 @@ Necesitas Flutter SDK, Android SDK y un emulador creado.
 - Cards por producto con: consumo diario, días hasta agotarse, barra de stock
 - Chips de estado: OK, Bajo, Pronto, Critico, Agotado
 - Resumen general: total productos, stock bajo, agotados
+
+### v1.4.0 (2026-04-08) - Escaneo de Boletas
+**Nueva funcionalidad:**
+- Escaneo de boletas de compra con OCR (Google ML Kit, on-device)
+- Captura desde cámara o selección de galería (image_picker)
+- ReceiptParserService: extrae productos, cantidades, precios y total
+- Reconoce formatos comunes: "2x Producto $123.45", unidades (KG, LT, UN, etc.)
+- Filtrado inteligente de headers/footers de boleta (RFC, fecha, cajero, etc.)
+- Pantalla de revisión: seleccionar/deseleccionar items, editar nombre/cantidad/precio
+- Vista del texto OCR completo para referencia
+- Matching automático con productos existentes en inventario
+- Botón de escaneo en pantalla de Listas de Compras (FAB secundario)
