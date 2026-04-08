@@ -395,11 +395,20 @@ class ShoppingListDetailScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () async {
-              // Update stock for purchased items
+              // Update stock and record prices for purchased items
               final inventory = context.read<InventoryProvider>();
               for (final item in purchasedItems) {
                 await inventory.incrementStock(
                     item.productId, item.quantity);
+                // Record the price paid in price history
+                final pricePaid = item.actualPrice ?? item.estimatedPrice;
+                if (pricePaid != null) {
+                  await inventory.recordPrice(
+                    item.productId,
+                    pricePaid,
+                    source: 'shopping_list',
+                  );
+                }
               }
 
               // Register expense in budget automatically

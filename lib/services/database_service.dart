@@ -7,6 +7,7 @@ import '../models/shopping_item.dart';
 import '../models/shopping_list.dart';
 import '../models/budget.dart';
 import '../models/consumption_log.dart';
+import '../models/price_record.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -30,7 +31,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -114,6 +115,17 @@ class DatabaseService {
       )
     ''');
 
+    await db.execute('''
+      CREATE TABLE price_history (
+        id TEXT PRIMARY KEY,
+        productId TEXT NOT NULL,
+        price REAL NOT NULL,
+        date TEXT NOT NULL,
+        source TEXT,
+        FOREIGN KEY (productId) REFERENCES products(id) ON DELETE CASCADE
+      )
+    ''');
+
     // Insert default categories
     for (final category in Category.defaultCategories()) {
       await db.insert('categories', category.toMap());
@@ -128,6 +140,18 @@ class DatabaseService {
           productId TEXT NOT NULL,
           quantity REAL NOT NULL,
           timestamp TEXT NOT NULL,
+          FOREIGN KEY (productId) REFERENCES products(id) ON DELETE CASCADE
+        )
+      ''');
+    }
+    if (oldVersion < 3) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS price_history (
+          id TEXT PRIMARY KEY,
+          productId TEXT NOT NULL,
+          price REAL NOT NULL,
+          date TEXT NOT NULL,
+          source TEXT,
           FOREIGN KEY (productId) REFERENCES products(id) ON DELETE CASCADE
         )
       ''');
@@ -434,5 +458,61 @@ class DatabaseService {
       'outOfStockCount': outOfStock['count'],
       'activeListsCount': activeLists['count'],
     };
+  }
+
+  // ==================== PRICE HISTORY ====================
+
+  Future<void> insertPriceRecord(PriceRecord record) async {
+    final db = await database;
+    await db.insert('price_history', record.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<PriceRecord>> getPriceHistory(String productId,
+      {int limit = 20}) async {
+    final db = await database;
+    final maps = await db.query(
+      'price_history',
+      where: 'productId = ?',
+      whereArgs: [productId],
+      orderBy: 'date DESC',
+      limit: limit,
+    );
+    return maps.map((m) => PriceRecord.fromMap(m)).toList();
+  }
+
+  Future<double?> getLatestPrice(String productId) async {
+    final db = await database;
+    final maps = await db.query(
+      'price_history',
+      where: 'productId = ?',
+      whereArgs: [productId],
+      orderBy: 'date DESC',
+      limit: 1,
+    );
+    if (maps.isEmpty) return null;
+    return (maps.first['price'] as num).toDouble();
+  }
+
+  Future<Map<String, double>> getPriceTrend(String productId,
+      {int months = 6}) async {
+    final db = await database;
+    final since = DateTime.now()
+        .subtract(Duration(days: months * 30))
+        .toIso8601String();
+    final results = await db.rawQuery('''
+      SELECT strftime('%Y-%m', date) as month, AVG(price) as avgPrice
+      FROM price_history
+      WHERE productId = ? AND date >= ?
+      GROUP BY strftime('%Y-%m', date)
+      ORDER BY month ASC
+    ''', [productId, since]);
+
+    final trend = <String, double>{};
+    for (final row in results) {
+      trend[row['month'] as String] =
+          (row['avgPrice'] as num).toDouble();
+    }
+    return trend;
   }
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../models/price_record.dart';
 import '../../providers/inventory_provider.dart';
 import '../../utils/app_theme.dart';
 import '../../utils/constants.dart';
@@ -223,9 +225,155 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 subtitle: Text(product.notes!),
               ),
             ),
+          const SizedBox(height: 16),
+          _buildPriceHistory(product, inventory),
         ],
       ),
     );
+  }
+
+  Widget _buildPriceHistory(product, InventoryProvider inventory) {
+    return FutureBuilder<List<PriceRecord>>(
+      future: inventory.getPriceHistory(product.id),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Icon(Icons.trending_flat, color: Colors.grey[400]),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Sin historial de precios. Se registra al completar compras.',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        final records = snapshot.data!;
+        final dateFormat = DateFormat('dd/MM/yy');
+        final latest = records.first.price;
+        final oldest = records.length > 1 ? records.last.price : latest;
+        final diff = latest - oldest;
+
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Historial de Precios',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold)),
+                    if (records.length > 1)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            diff > 0
+                                ? Icons.trending_up
+                                : diff < 0
+                                    ? Icons.trending_down
+                                    : Icons.trending_flat,
+                            size: 18,
+                            color: diff > 0
+                                ? AppTheme.errorColor
+                                : diff < 0
+                                    ? AppTheme.successColor
+                                    : Colors.grey,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            diff > 0
+                                ? '+\$${diff.toStringAsFixed(2)}'
+                                : diff < 0
+                                    ? '-\$${diff.abs().toStringAsFixed(2)}'
+                                    : 'Estable',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: diff > 0
+                                  ? AppTheme.errorColor
+                                  : diff < 0
+                                      ? AppTheme.successColor
+                                      : Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ...records.take(5).map((record) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        Text(
+                          dateFormat.format(record.date),
+                          style: TextStyle(
+                              color: Colors.grey[600], fontSize: 13),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          '\$${record.price.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
+                        const Spacer(),
+                        if (record.source != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryColor.withAlpha(25),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              _sourceLabel(record.source!),
+                              style: const TextStyle(
+                                  fontSize: 11, color: AppTheme.primaryColor),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                }),
+                if (records.length > 5) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    '${records.length - 5} registros mas...',
+                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _sourceLabel(String source) {
+    switch (source) {
+      case 'shopping_list':
+        return 'Compra';
+      case 'receipt':
+        return 'Boleta';
+      case 'manual':
+        return 'Manual';
+      default:
+        return source;
+    }
   }
 
   Widget _buildConsumptionPrediction(product, InventoryProvider inventory) {

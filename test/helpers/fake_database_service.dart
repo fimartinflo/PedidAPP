@@ -1,6 +1,7 @@
 import 'package:pedidapp/models/budget.dart';
 import 'package:pedidapp/models/category.dart';
 import 'package:pedidapp/models/consumption_log.dart';
+import 'package:pedidapp/models/price_record.dart';
 import 'package:pedidapp/models/product.dart';
 import 'package:pedidapp/models/shopping_item.dart';
 import 'package:pedidapp/models/shopping_list.dart';
@@ -16,6 +17,7 @@ class FakeDatabaseService extends DatabaseService {
   final List<ShoppingItem> _shoppingItems = [];
   final List<MonthlyBudget> _budgets = [];
   final List<ConsumptionLog> _consumptionLogs = [];
+  final List<PriceRecord> _priceRecords = [];
 
   // ==================== CATEGORIES ====================
 
@@ -273,5 +275,49 @@ class FakeDatabaseService extends DatabaseService {
   Future<Map<String, double>> getSpendingByCategory(
       int year, int month) async {
     return {};
+  }
+
+  // ==================== PRICE HISTORY ====================
+
+  @override
+  Future<void> insertPriceRecord(PriceRecord record) async {
+    _priceRecords.removeWhere((r) => r.id == record.id);
+    _priceRecords.add(record);
+  }
+
+  @override
+  Future<List<PriceRecord>> getPriceHistory(String productId,
+      {int limit = 20}) async {
+    final records = _priceRecords
+        .where((r) => r.productId == productId)
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    return records.take(limit).toList();
+  }
+
+  @override
+  Future<double?> getLatestPrice(String productId) async {
+    final records = _priceRecords
+        .where((r) => r.productId == productId)
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    if (records.isEmpty) return null;
+    return records.first.price;
+  }
+
+  @override
+  Future<Map<String, double>> getPriceTrend(String productId,
+      {int months = 6}) async {
+    final since = DateTime.now().subtract(Duration(days: months * 30));
+    final records = _priceRecords
+        .where((r) => r.productId == productId && r.date.isAfter(since))
+        .toList();
+    final trend = <String, double>{};
+    for (final r in records) {
+      final key =
+          '${r.date.year}-${r.date.month.toString().padLeft(2, '0')}';
+      trend.putIfAbsent(key, () => r.price);
+    }
+    return trend;
   }
 }
