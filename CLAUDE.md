@@ -52,6 +52,8 @@ lib/
 ├── models/                            # Modelos de datos (clases Dart puras)
 │   ├── budget.dart                    # MonthlyBudget - presupuesto mensual
 │   ├── category.dart                  # Category - categorías (10 predefinidas)
+│   ├── list_template.dart             # ListTemplate + TemplateItem - plantillas reutilizables
+│   ├── price_record.dart              # PriceRecord - historial de precios por producto
 │   ├── product.dart                   # Product - productos con stock
 │   ├── shopping_item.dart             # ShoppingItem - item dentro de lista
 │   └── shopping_list.dart             # ShoppingList - lista de compras
@@ -76,14 +78,14 @@ lib/
 │   ├── history/
 │   │   └── history_screen.dart        # Historial de compras completadas
 │   ├── settings/
-│   │   └── settings_screen.dart       # Ajustes (notificaciones, tema)
+│   │   └── settings_screen.dart       # Ajustes (notificaciones, tema, recordatorios)
 │   └── shopping_list/
 │       ├── scan_receipt_screen.dart          # Escaneo de boletas con OCR
-│       ├── shopping_list_detail_screen.dart  # Items de una lista
-│       └── shopping_lists_screen.dart        # Listas activas/completadas
+│       ├── shopping_list_detail_screen.dart  # Items de una lista, guardar plantilla
+│       └── shopping_lists_screen.dart        # Listas activas/completadas/plantillas
 ├── services/                          # Servicios singleton
-│   ├── database_service.dart          # SQLite CRUD completo (5 tablas)
-│   ├── notification_service.dart      # Notificaciones locales
+│   ├── database_service.dart          # SQLite CRUD completo (8 tablas)
+│   ├── notification_service.dart      # Notificaciones locales + recordatorios programados
 │   └── receipt_parser_service.dart    # OCR y parseo de boletas de compra
 ├── utils/                             # Utilidades
 │   ├── app_theme.dart                 # Tema Material 3, colores, mapeo de íconos
@@ -108,6 +110,8 @@ test/
 │   ├── budget_test.dart               # Tests MonthlyBudget
 │   ├── category_test.dart             # Tests Category
 │   ├── consumption_log_test.dart      # Tests ConsumptionLog
+│   ├── list_template_test.dart        # Tests ListTemplate y TemplateItem
+│   ├── price_record_test.dart         # Tests PriceRecord
 │   ├── product_test.dart              # Tests Product
 │   └── shopping_list_test.dart        # Tests ShoppingItem y ShoppingList
 └── providers/
@@ -116,7 +120,7 @@ test/
     └── shopping_list_provider_test.dart # Tests ShoppingListProvider
 ```
 
-## Esquema de Base de Datos (SQLite v2)
+## Esquema de Base de Datos (SQLite v4)
 
 ```sql
 -- Categorías de productos (10 predefinidas al crear BD)
@@ -146,6 +150,18 @@ monthly_budgets (id TEXT PK, year INTEGER, month INTEGER,
 -- Logs de consumo (para predicción)
 consumption_logs (id TEXT PK, productId TEXT FK→products,
                   quantity REAL, timestamp TEXT)
+
+-- Historial de precios por producto (v3)
+price_history (id TEXT PK, productId TEXT FK→products,
+               price REAL, date TEXT, source TEXT)
+
+-- Plantillas de listas reutilizables (v4)
+list_templates (id TEXT PK, name TEXT, createdAt TEXT)
+
+-- Items de plantilla (v4)
+template_items (id TEXT PK, templateId TEXT FK→list_templates,
+                productId TEXT, productName TEXT, categoryId TEXT,
+                quantity REAL, unit TEXT, estimatedPrice REAL)
 ```
 
 ## Navegación
@@ -165,15 +181,16 @@ HomeScreen (Scaffold + BottomNavigationBar)
 │   ├── ProductDetailScreen → editar/eliminar
 │   └── AddProductScreen → formulario
 ├── Tab 2: Compras (ShoppingListsScreen)
-│   ├── Tab Activas / Tab Completadas
+│   ├── Tab Activas / Tab Completadas / Tab Plantillas
 │   ├── ScanReceiptScreen → escanear boleta con OCR, crear lista automática
-│   └── ShoppingListDetailScreen → marcar items, compartir
+│   └── ShoppingListDetailScreen → marcar items, compartir, guardar plantilla
 ├── Tab 3: Presupuesto (BudgetScreen)
 │   ├── Presupuesto actual con indicador circular
 │   └── Historial de meses anteriores
 └── Tab 4: Ajustes (SettingsScreen)
     ├── Toggle notificaciones
     ├── Toggle modo oscuro
+    ├── Recordatorio semanal (día + hora)
     └── Gestionar Categorías → CategoriesScreen
 ```
 
@@ -391,6 +408,12 @@ Necesitas Flutter SDK, Android SDK y un emulador creado.
 - [x] Política de privacidad (PRIVACY_POLICY.md)
 - [ ] Tests de widgets para pantallas principales (requiere entorno Flutter)
 
+### Fase 3.5 - Funcionalidades Avanzadas (Completada v1.5.0)
+- [x] Historial de precios por producto con tendencias
+- [x] Plantillas de listas reutilizables
+- [x] Recordatorios semanales programados
+- [x] Tests unitarios para nuevos modelos (PriceRecord, ListTemplate, TemplateItem)
+
 ### Fase 4 - Publicación (Prioridad Futura)
 - [ ] Generar configs nativos con `flutter create .`
 - [ ] Configurar AndroidManifest.xml (permisos de notificaciones)
@@ -488,3 +511,29 @@ Necesitas Flutter SDK, Android SDK y un emulador creado.
 - Tests para generateFromLowStock (lista vacía, nombre personalizado)
 - Tests para completeList (completedAt timestamp)
 - Tests para updateProduct, getProductsByCategory, outOfStockProducts, decrementStock+consumptionLog en InventoryProvider
+
+### v1.5.0 (2026-04-09) - Historial de Precios, Plantillas y Recordatorios
+**Historial de precios por producto:**
+- Modelo PriceRecord con source tracking (manual, shopping_list, receipt)
+- DB v3→v4 con tabla price_history
+- InventoryProvider.recordPrice() auto-actualiza estimatedPrice
+- Detalle de producto muestra últimos 5 precios con indicador de tendencia (↑↓→)
+- Al completar lista de compras se registran precios en historial
+- Tests unitarios para PriceRecord (8 tests)
+
+**Plantillas de listas reutilizables:**
+- Modelos ListTemplate y TemplateItem
+- DB v4 con tablas list_templates y template_items
+- Tab "Plantillas" en pantalla de Listas de Compras
+- Guardar cualquier lista como plantilla (botón bookmark en detalle)
+- Crear nueva lista desde plantilla con nombre y presupuesto personalizable
+- Preview de plantilla: productos, total estimado, items destacados
+- Tests unitarios para ListTemplate y TemplateItem (15 tests)
+
+**Recordatorios semanales programados:**
+- ShoppingReminder modelo con día de semana y hora
+- NotificationService: schedule/cancel weekly reminders (periodicallyShow)
+- Sección de recordatorios en pantalla de Ajustes
+- Selector de día (Lunes-Domingo) y selector de hora
+- Config persistida en SharedPreferences
+- Se deshabilita automáticamente si notificaciones están apagadas
