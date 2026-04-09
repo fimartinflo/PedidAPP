@@ -1,6 +1,7 @@
 import 'package:pedidapp/models/budget.dart';
 import 'package:pedidapp/models/category.dart';
 import 'package:pedidapp/models/consumption_log.dart';
+import 'package:pedidapp/models/list_template.dart';
 import 'package:pedidapp/models/price_record.dart';
 import 'package:pedidapp/models/product.dart';
 import 'package:pedidapp/models/shopping_item.dart';
@@ -18,6 +19,7 @@ class FakeDatabaseService extends DatabaseService {
   final List<MonthlyBudget> _budgets = [];
   final List<ConsumptionLog> _consumptionLogs = [];
   final List<PriceRecord> _priceRecords = [];
+  final List<ListTemplate> _templates = [];
 
   // ==================== CATEGORIES ====================
 
@@ -278,6 +280,25 @@ class FakeDatabaseService extends DatabaseService {
   }
 
   // ==================== PRICE HISTORY ====================
+
+  // ==================== LIST TEMPLATES ====================
+
+  @override
+  Future<List<ListTemplate>> getTemplates() async {
+    return List.from(_templates)
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
+  @override
+  Future<void> insertTemplate(ListTemplate template) async {
+    _templates.removeWhere((t) => t.id == template.id);
+    _templates.add(template);
+  }
+
+  @override
+  Future<void> deleteTemplate(String id) async {
+    _templates.removeWhere((t) => t.id == id);
+  }
 
   @override
   Future<void> insertPriceRecord(PriceRecord record) async {

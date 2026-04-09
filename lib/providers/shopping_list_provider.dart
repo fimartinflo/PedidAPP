@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 import '../models/shopping_list.dart';
 import '../models/shopping_item.dart';
 import '../models/product.dart';
+import '../models/list_template.dart';
 import '../services/database_service.dart';
 import '../services/notification_service.dart';
 
@@ -18,9 +19,11 @@ class ShoppingListProvider extends ChangeNotifier {
         _notifications = notifications ?? NotificationService();
 
   List<ShoppingList> _shoppingLists = [];
+  List<ListTemplate> _templates = [];
   bool _isLoading = false;
 
   List<ShoppingList> get shoppingLists => _shoppingLists;
+  List<ListTemplate> get templates => _templates;
   bool get isLoading => _isLoading;
 
   List<ShoppingList> get activeLists =>
@@ -34,6 +37,7 @@ class ShoppingListProvider extends ChangeNotifier {
     notifyListeners();
 
     _shoppingLists = await _db.getShoppingLists();
+    _templates = await _db.getTemplates();
 
     _isLoading = false;
     notifyListeners();
@@ -138,6 +142,82 @@ class ShoppingListProvider extends ChangeNotifier {
   Future<void> deleteList(String listId) async {
     await _db.deleteShoppingList(listId);
     _shoppingLists.removeWhere((l) => l.id == listId);
+    notifyListeners();
+  }
+
+  // ==================== TEMPLATES ====================
+
+  Future<void> loadTemplates() async {
+    _templates = await _db.getTemplates();
+    notifyListeners();
+  }
+
+  Future<ListTemplate> saveAsTemplate(String listId, {String? name}) async {
+    final list = _shoppingLists.firstWhere((l) => l.id == listId);
+    final template = ListTemplate(
+      id: _uuid.v4(),
+      name: name ?? 'Plantilla: ${list.name}',
+      items: list.items.map((item) => TemplateItem(
+        id: _uuid.v4(),
+        templateId: '',
+        productId: item.productId,
+        productName: item.productName,
+        categoryId: item.categoryId,
+        quantity: item.quantity,
+        unit: item.unit,
+        estimatedPrice: item.estimatedPrice,
+      )).toList(),
+    );
+
+    final withId = template.copyWith(
+      items: template.items
+          .map((i) => TemplateItem(
+                id: i.id,
+                templateId: template.id,
+                productId: i.productId,
+                productName: i.productName,
+                categoryId: i.categoryId,
+                quantity: i.quantity,
+                unit: i.unit,
+                estimatedPrice: i.estimatedPrice,
+              ))
+          .toList(),
+    );
+
+    await _db.insertTemplate(withId);
+    _templates.insert(0, withId);
+    notifyListeners();
+    return withId;
+  }
+
+  Future<ShoppingList> createFromTemplate(ListTemplate template,
+      {String? name, double? budgetLimit}) async {
+    final list = await createShoppingList(
+      name: name ?? template.name,
+      budgetLimit: budgetLimit,
+    );
+
+    for (final tItem in template.items) {
+      final item = ShoppingItem(
+        id: _uuid.v4(),
+        shoppingListId: list.id,
+        productId: tItem.productId,
+        productName: tItem.productName,
+        categoryId: tItem.categoryId,
+        quantity: tItem.quantity,
+        unit: tItem.unit,
+        estimatedPrice: tItem.estimatedPrice,
+      );
+      await _db.insertShoppingItem(item);
+    }
+
+    await loadShoppingLists();
+    return _shoppingLists.firstWhere((l) => l.id == list.id);
+  }
+
+  Future<void> deleteTemplate(String templateId) async {
+    await _db.deleteTemplate(templateId);
+    _templates.removeWhere((t) => t.id == templateId);
     notifyListeners();
   }
 

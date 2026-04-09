@@ -8,6 +8,7 @@ import '../models/shopping_list.dart';
 import '../models/budget.dart';
 import '../models/consumption_log.dart';
 import '../models/price_record.dart';
+import '../models/list_template.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -31,7 +32,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -126,6 +127,28 @@ class DatabaseService {
       )
     ''');
 
+    await db.execute('''
+      CREATE TABLE list_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        createdAt TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE template_items (
+        id TEXT PRIMARY KEY,
+        templateId TEXT NOT NULL,
+        productId TEXT NOT NULL,
+        productName TEXT NOT NULL,
+        categoryId TEXT NOT NULL,
+        quantity REAL DEFAULT 1,
+        unit TEXT DEFAULT 'unidad',
+        estimatedPrice REAL,
+        FOREIGN KEY (templateId) REFERENCES list_templates(id) ON DELETE CASCADE
+      )
+    ''');
+
     // Insert default categories
     for (final category in Category.defaultCategories()) {
       await db.insert('categories', category.toMap());
@@ -153,6 +176,28 @@ class DatabaseService {
           date TEXT NOT NULL,
           source TEXT,
           FOREIGN KEY (productId) REFERENCES products(id) ON DELETE CASCADE
+        )
+      ''');
+    }
+    if (oldVersion < 4) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS list_templates (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          createdAt TEXT NOT NULL
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS template_items (
+          id TEXT PRIMARY KEY,
+          templateId TEXT NOT NULL,
+          productId TEXT NOT NULL,
+          productName TEXT NOT NULL,
+          categoryId TEXT NOT NULL,
+          quantity REAL DEFAULT 1,
+          unit TEXT DEFAULT 'unidad',
+          estimatedPrice REAL,
+          FOREIGN KEY (templateId) REFERENCES list_templates(id) ON DELETE CASCADE
         )
       ''');
     }
@@ -492,6 +537,40 @@ class DatabaseService {
     );
     if (maps.isEmpty) return null;
     return (maps.first['price'] as num).toDouble();
+  }
+
+  // ==================== LIST TEMPLATES ====================
+
+  Future<List<ListTemplate>> getTemplates() async {
+    final db = await database;
+    final templateMaps =
+        await db.query('list_templates', orderBy: 'createdAt DESC');
+    final templates = <ListTemplate>[];
+
+    for (final map in templateMaps) {
+      final itemMaps = await db.query('template_items',
+          where: 'templateId = ?', whereArgs: [map['id']]);
+      final items = itemMaps.map((m) => TemplateItem.fromMap(m)).toList();
+      templates.add(ListTemplate.fromMap(map, items: items));
+    }
+    return templates;
+  }
+
+  Future<void> insertTemplate(ListTemplate template) async {
+    final db = await database;
+    await db.insert('list_templates', template.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+    for (final item in template.items) {
+      await db.insert('template_items', item.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  Future<void> deleteTemplate(String id) async {
+    final db = await database;
+    await db.delete('template_items',
+        where: 'templateId = ?', whereArgs: [id]);
+    await db.delete('list_templates', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<Map<String, double>> getPriceTrend(String productId,

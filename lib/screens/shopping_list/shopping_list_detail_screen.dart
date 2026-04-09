@@ -32,6 +32,13 @@ class ShoppingListDetailScreen extends StatelessWidget {
                 tooltip: 'Compartir lista',
                 onPressed: () => _shareList(list, context),
               ),
+              if (list.items.isNotEmpty)
+                IconButton(
+                  icon: const Icon(Icons.bookmark_add),
+                  tooltip: 'Guardar como plantilla',
+                  onPressed: () =>
+                      _saveAsTemplate(context, list, provider),
+                ),
               if (list.status == ShoppingListStatus.active)
                 IconButton(
                   icon: const Icon(Icons.check_circle),
@@ -352,6 +359,58 @@ class ShoppingListDetailScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  void _saveAsTemplate(BuildContext context, ShoppingList list,
+      ShoppingListProvider provider) {
+    final nameController = TextEditingController(
+      text: 'Plantilla: ${list.name}',
+    );
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Guardar como Plantilla'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Se guardaran ${list.totalItems} productos como plantilla reutilizable.'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'Nombre de la plantilla',
+              ),
+              textCapitalization: TextCapitalization.sentences,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await provider.saveAsTemplate(
+                list.id,
+                name: nameController.text.trim(),
+              );
+              if (ctx.mounted) {
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Plantilla guardada exitosamente'),
+                  ),
+                );
+              }
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    ).then((_) => nameController.dispose());
   }
 
   void _completeList(BuildContext context, ShoppingList list,
