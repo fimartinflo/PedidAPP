@@ -8,6 +8,7 @@ class FakeNotificationService extends NotificationService {
   final List<String> calls = [];
   List<Product> lastLowStockProducts = [];
   double? lastBudgetWarningPercent;
+  ShoppingReminder? lastSavedReminder;
 
   @override
   Future<void> initialize() async {
@@ -42,5 +43,21 @@ class FakeNotificationService extends NotificationService {
   Future<void> showBudgetWarning(double percentUsed) async {
     calls.add('showBudgetWarning');
     lastBudgetWarningPercent = percentUsed;
+  }
+
+  @override
+  Future<ShoppingReminder> getShoppingReminder() async {
+    return lastSavedReminder ?? const ShoppingReminder();
+  }
+
+  @override
+  Future<void> saveShoppingReminder(ShoppingReminder reminder) async {
+    calls.add('saveShoppingReminder:${reminder.dayName}');
+    lastSavedReminder = reminder;
+  }
+
+  @override
+  Future<void> cancelShoppingReminder() async {
+    calls.add('cancelShoppingReminder');
   }
 }
