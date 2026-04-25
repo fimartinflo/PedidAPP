@@ -8,9 +8,8 @@ void main() {
     parser = ReceiptParserService();
   });
 
-  tearDown(() {
-    parser.dispose();
-  });
+  // Note: don't call parser.dispose() in tests — it tries to close
+  // the ML Kit TextRecognizer which requires platform bindings.
 
   // =========================================================================
   // _parseLine (via @visibleForTesting parseLine)

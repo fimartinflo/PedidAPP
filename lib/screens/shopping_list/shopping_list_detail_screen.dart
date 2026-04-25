@@ -85,7 +85,7 @@ class ShoppingListDetailScreen extends StatelessWidget {
       for (final item in entry.value) {
         final check = item.isPurchased ? '✓' : '○';
         final price = item.estimatedPrice != null
-            ? ' - \$${item.estimatedPrice.toStringAsFixed(2)}'
+            ? ' - \$${item.estimatedPrice!.toStringAsFixed(2)}'
             : '';
         buffer.writeln(
             '  $check ${item.productName} (${item.quantity.toStringAsFixed(1)} ${item.unit})$price');
@@ -99,7 +99,7 @@ class ShoppingListDetailScreen extends StatelessWidget {
         'Progreso: ${list.purchasedItems}/${list.totalItems} productos');
     buffer.writeln('\nEnviado desde PedidAPP');
 
-    SharePlus.instance.share(ShareParams(text: buffer.toString()));
+    Share.share(buffer.toString());
   }
 
   Widget _buildSummary(ShoppingList list) {

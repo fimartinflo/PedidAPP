@@ -87,6 +87,9 @@ class ReceiptParserService {
     // Skip very short lines (likely not products)
     if (line.length < 3) return null;
 
+    // Skip header/footer lines (RFC, dates, cajero, IVA, etc.)
+    if (_isHeaderOrFooter(line)) return null;
+
     // Pattern 1: "PRODUCT NAME    $123.45" or "PRODUCT NAME   123.45"
     // Pattern 2: "2 x PRODUCT NAME    $123.45"
     // Pattern 3: "PRODUCT NAME  2x  $123.45"
@@ -184,6 +187,7 @@ class ReceiptParserService {
       'subtotal', 'total', 'descuento', 'vuelto', 'cambio',
       'efectivo', 'tarjeta', 'debito', 'credito', 'pago',
       'iva', 'impuesto', 'neto', 'bruto', 'redondeo',
+      'gracias', 'vuelva',
     ];
     for (final word in skipWords) {
       if (lower == word || lower.startsWith('$word ')) return true;
@@ -241,7 +245,7 @@ class ReceiptParserService {
 
   double? _extractTotal(String text) {
     final totalMatch = RegExp(
-      r'total\s*[\$:]?\s*(\d+[.,]\d{2})',
+      r'\btotal\s*[\$:]?\s*(\d+[.,]\d{2})',
       caseSensitive: false,
     ).firstMatch(text);
 

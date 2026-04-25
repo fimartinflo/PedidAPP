@@ -5,7 +5,6 @@ import '../../providers/budget_provider.dart';
 import '../../providers/inventory_provider.dart';
 import '../../services/database_service.dart';
 import '../../utils/app_theme.dart';
-import '../../widgets/empty_state.dart';
 
 class BudgetScreen extends StatefulWidget {
   const BudgetScreen({super.key});

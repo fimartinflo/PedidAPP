@@ -5,7 +5,6 @@ import '../../providers/shopping_list_provider.dart';
 import '../../providers/budget_provider.dart';
 import '../../utils/app_theme.dart';
 import '../../widgets/category_avatar.dart';
-import '../../widgets/empty_state.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/stat_card.dart';
 import '../../widgets/stock_indicator.dart';
