@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../providers/shopping_list_provider.dart';
 import '../../providers/inventory_provider.dart';
 import '../../providers/budget_provider.dart';
+import '../../models/shopping_item.dart';
 import '../../models/shopping_list.dart';
 import '../../utils/app_theme.dart';
+import '../../widgets/empty_state.dart';
 
 class ShoppingListDetailScreen extends StatelessWidget {
   final String listId;
@@ -24,6 +27,18 @@ class ShoppingListDetailScreen extends StatelessWidget {
           appBar: AppBar(
             title: Text(list.name),
             actions: [
+              IconButton(
+                icon: const Icon(Icons.share),
+                tooltip: 'Compartir lista',
+                onPressed: () => _shareList(list, context),
+              ),
+              if (list.items.isNotEmpty)
+                IconButton(
+                  icon: const Icon(Icons.bookmark_add),
+                  tooltip: 'Guardar como plantilla',
+                  onPressed: () =>
+                      _saveAsTemplate(context, list, provider),
+                ),
               if (list.status == ShoppingListStatus.active)
                 IconButton(
                   icon: const Icon(Icons.check_circle),
@@ -49,7 +64,49 @@ class ShoppingListDetailScreen extends StatelessWidget {
     );
   }
 
+  void _shareList(ShoppingList list, BuildContext context) {
+    final inventory = context.read<InventoryProvider>();
+    final buffer = StringBuffer();
+    buffer.writeln('Lista: ${list.name}');
+    buffer.writeln('${'─' * 30}');
+
+    // Group items by category
+    final groupedItems = <String, List<ShoppingItem>>{};
+    for (final item in list.items) {
+      final category = inventory.categories.firstWhere(
+        (c) => c.id == item.categoryId,
+        orElse: () => inventory.categories.last,
+      );
+      groupedItems.putIfAbsent(category.name, () => []).add(item);
+    }
+
+    for (final entry in groupedItems.entries) {
+      buffer.writeln('\n${entry.key}:');
+      for (final item in entry.value) {
+        final check = item.isPurchased ? '✓' : '○';
+        final price = item.estimatedPrice != null
+            ? ' - \$${item.estimatedPrice!.toStringAsFixed(2)}'
+            : '';
+        buffer.writeln(
+            '  $check ${item.productName} (${item.quantity.toStringAsFixed(1)} ${item.unit})$price');
+      }
+    }
+
+    buffer.writeln('\n${'─' * 30}');
+    buffer.writeln(
+        'Total estimado: \$${list.totalEstimated.toStringAsFixed(2)}');
+    buffer.writeln(
+        'Progreso: ${list.purchasedItems}/${list.totalItems} productos');
+    buffer.writeln('\nEnviado desde PedidAPP');
+
+    Share.share(buffer.toString());
+  }
+
   Widget _buildSummary(ShoppingList list) {
+    final purchasedTotal = list.items
+        .where((i) => i.isPurchased)
+        .fold<double>(0, (sum, i) => sum + i.totalActual);
+
     return Container(
       padding: const EdgeInsets.all(16),
       color: AppTheme.primaryColor.withAlpha(25),
@@ -86,6 +143,20 @@ class ShoppingListDetailScreen extends StatelessWidget {
               const Text('Estimado'),
             ],
           ),
+          if (purchasedTotal > 0)
+            Column(
+              children: [
+                Text(
+                  '\$${purchasedTotal.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.primaryColor,
+                  ),
+                ),
+                const Text('Gastado'),
+              ],
+            ),
         ],
       ),
     );
@@ -94,28 +165,16 @@ class ShoppingListDetailScreen extends StatelessWidget {
   Widget _buildItemsList(BuildContext context, ShoppingList list,
       ShoppingListProvider provider) {
     if (list.items.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.shopping_bag_outlined,
-                size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            const Text('Lista vacia'),
-            const SizedBox(height: 8),
-            ElevatedButton.icon(
-              onPressed: () =>
-                  _showAddItemDialog(context, list.id, provider),
-              icon: const Icon(Icons.add),
-              label: const Text('Agregar producto'),
-            ),
-          ],
-        ),
+      return EmptyState(
+        icon: Icons.shopping_bag_outlined,
+        message: 'Lista vacia',
+        actionLabel: 'Agregar producto',
+        onAction: () => _showAddItemDialog(context, list.id, provider),
       );
     }
 
     // Group items by category
-    final groupedItems = <String, List<dynamic>>{};
+    final groupedItems = <String, List<ShoppingItem>>{};
     final inventory = context.read<InventoryProvider>();
 
     for (final item in list.items) {
@@ -155,8 +214,7 @@ class ShoppingListDetailScreen extends StatelessWidget {
                   child: CheckboxListTile(
                     value: item.isPurchased,
                     onChanged: list.status == ShoppingListStatus.active
-                        ? (_) =>
-                            provider.toggleItemPurchased(list.id, item.id)
+                        ? (_) => _onToggleItem(context, list.id, item, provider)
                         : null,
                     title: Text(
                       item.productName,
@@ -182,6 +240,60 @@ class ShoppingListDetailScreen extends StatelessWidget {
         );
       }).toList(),
     );
+  }
+
+  void _onToggleItem(BuildContext context, String listId, ShoppingItem item,
+      ShoppingListProvider provider) {
+    if (item.isPurchased) {
+      // Unmark - just toggle
+      provider.toggleItemPurchased(listId, item.id);
+      return;
+    }
+
+    // Mark as purchased - ask for actual price
+    final priceController = TextEditingController(
+      text: item.estimatedPrice?.toStringAsFixed(2) ?? '',
+    );
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Precio real'),
+        content: TextField(
+          controller: priceController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Precio unitario',
+            prefixText: '\$ ',
+            hintText: 'Dejar vacio para usar estimado',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              provider.toggleItemPurchased(listId, item.id);
+            },
+            child: const Text('Omitir'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final price = double.tryParse(priceController.text);
+              try {
+                if (price != null) {
+                  await provider.updateItemActualPrice(item.id, price);
+                }
+                await provider.toggleItemPurchased(listId, item.id);
+              } finally {
+                if (ctx.mounted) Navigator.pop(ctx);
+              }
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    ).then((_) => priceController.dispose());
   }
 
   void _showAddItemDialog(BuildContext context, String listId,
@@ -249,15 +361,91 @@ class ShoppingListDetailScreen extends StatelessWidget {
     );
   }
 
+  void _saveAsTemplate(BuildContext context, ShoppingList list,
+      ShoppingListProvider provider) {
+    final nameController = TextEditingController(
+      text: 'Plantilla: ${list.name}',
+    );
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Guardar como Plantilla'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Se guardaran ${list.totalItems} productos como plantilla reutilizable.'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'Nombre de la plantilla',
+              ),
+              textCapitalization: TextCapitalization.sentences,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await provider.saveAsTemplate(
+                list.id,
+                name: nameController.text.trim(),
+              );
+              if (ctx.mounted) {
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Plantilla guardada exitosamente'),
+                  ),
+                );
+              }
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    ).then((_) => nameController.dispose());
+  }
+
   void _completeList(BuildContext context, ShoppingList list,
       ShoppingListProvider provider) {
+    final purchasedItems = list.items.where((i) => i.isPurchased).toList();
+    final totalSpent = purchasedItems.fold<double>(
+      0,
+      (sum, item) => sum + item.totalActual,
+    );
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Completar Lista'),
-        content: Text(
-          'Completar "${list.name}"?\n'
-          '${list.purchasedItems} de ${list.totalItems} productos comprados.',
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Completar "${list.name}"?'),
+            const SizedBox(height: 8),
+            Text(
+              '${purchasedItems.length} de ${list.totalItems} productos comprados.',
+            ),
+            if (totalSpent > 0) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Total gastado: \$${totalSpent.toStringAsFixed(2)}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const Text(
+                'Se registrara automaticamente en el presupuesto.',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ],
         ),
         actions: [
           TextButton(
@@ -266,23 +454,41 @@ class ShoppingListDetailScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () async {
-              // Update stock for purchased items
+              // Update stock and record prices for purchased items
               final inventory = context.read<InventoryProvider>();
-              for (final item in list.items.where((i) => i.isPurchased)) {
+              for (final item in purchasedItems) {
                 await inventory.incrementStock(
                     item.productId, item.quantity);
+                // Record the price paid in price history
+                final pricePaid = item.actualPrice ?? item.estimatedPrice;
+                if (pricePaid != null) {
+                  await inventory.recordPrice(
+                    item.productId,
+                    pricePaid,
+                    source: 'shopping_list',
+                  );
+                }
               }
 
-              // Add to budget
+              // Register expense in budget automatically
               final budget = context.read<BudgetProvider>();
-              if (list.totalActual > 0) {
-                await budget.addExpense(list.totalActual);
+              if (totalSpent > 0) {
+                await budget.addExpense(totalSpent);
               }
 
               await provider.completeList(list.id);
               if (context.mounted) {
                 Navigator.pop(context); // dialog
                 Navigator.pop(context); // detail screen
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      totalSpent > 0
+                          ? 'Lista completada. \$${totalSpent.toStringAsFixed(2)} registrados en presupuesto.'
+                          : 'Lista completada.',
+                    ),
+                  ),
+                );
               }
             },
             child: const Text('Completar'),

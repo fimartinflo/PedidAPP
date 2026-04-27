@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' hide Category;
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/category.dart';
@@ -5,11 +6,18 @@ import '../models/product.dart';
 import '../models/shopping_item.dart';
 import '../models/shopping_list.dart';
 import '../models/budget.dart';
+import '../models/consumption_log.dart';
+import '../models/price_record.dart';
+import '../models/list_template.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
   factory DatabaseService() => _instance;
   DatabaseService._internal();
+
+  /// Constructor for testing subclasses
+  @protected
+  DatabaseService.forTesting();
 
   Database? _database;
 
@@ -24,8 +32,9 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 4,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -97,9 +106,100 @@ class DatabaseService {
       )
     ''');
 
+    await db.execute('''
+      CREATE TABLE consumption_logs (
+        id TEXT PRIMARY KEY,
+        productId TEXT NOT NULL,
+        quantity REAL NOT NULL,
+        timestamp TEXT NOT NULL,
+        FOREIGN KEY (productId) REFERENCES products(id) ON DELETE CASCADE
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE price_history (
+        id TEXT PRIMARY KEY,
+        productId TEXT NOT NULL,
+        price REAL NOT NULL,
+        date TEXT NOT NULL,
+        source TEXT,
+        FOREIGN KEY (productId) REFERENCES products(id) ON DELETE CASCADE
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE list_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        createdAt TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE template_items (
+        id TEXT PRIMARY KEY,
+        templateId TEXT NOT NULL,
+        productId TEXT NOT NULL,
+        productName TEXT NOT NULL,
+        categoryId TEXT NOT NULL,
+        quantity REAL DEFAULT 1,
+        unit TEXT DEFAULT 'unidad',
+        estimatedPrice REAL,
+        FOREIGN KEY (templateId) REFERENCES list_templates(id) ON DELETE CASCADE
+      )
+    ''');
+
     // Insert default categories
     for (final category in Category.defaultCategories()) {
       await db.insert('categories', category.toMap());
+    }
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS consumption_logs (
+          id TEXT PRIMARY KEY,
+          productId TEXT NOT NULL,
+          quantity REAL NOT NULL,
+          timestamp TEXT NOT NULL,
+          FOREIGN KEY (productId) REFERENCES products(id) ON DELETE CASCADE
+        )
+      ''');
+    }
+    if (oldVersion < 3) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS price_history (
+          id TEXT PRIMARY KEY,
+          productId TEXT NOT NULL,
+          price REAL NOT NULL,
+          date TEXT NOT NULL,
+          source TEXT,
+          FOREIGN KEY (productId) REFERENCES products(id) ON DELETE CASCADE
+        )
+      ''');
+    }
+    if (oldVersion < 4) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS list_templates (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          createdAt TEXT NOT NULL
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS template_items (
+          id TEXT PRIMARY KEY,
+          templateId TEXT NOT NULL,
+          productId TEXT NOT NULL,
+          productName TEXT NOT NULL,
+          categoryId TEXT NOT NULL,
+          quantity REAL DEFAULT 1,
+          unit TEXT DEFAULT 'unidad',
+          estimatedPrice REAL,
+          FOREIGN KEY (templateId) REFERENCES list_templates(id) ON DELETE CASCADE
+        )
+      ''');
     }
   }
 
@@ -266,6 +366,17 @@ class DatabaseService {
         where: 'id = ?', whereArgs: [id]);
   }
 
+  Future<void> updateShoppingItemActualPrice(
+      String id, double actualPrice) async {
+    final db = await database;
+    await db.update(
+      'shopping_items',
+      {'actualPrice': actualPrice},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
   // ==================== BUDGETS ====================
 
   Future<List<MonthlyBudget>> getBudgets() async {
@@ -295,6 +406,80 @@ class DatabaseService {
         where: 'id = ?', whereArgs: [id]);
   }
 
+  // ==================== CONSUMPTION LOGS ====================
+
+  Future<void> insertConsumptionLog(ConsumptionLog log) async {
+    final db = await database;
+    await db.insert('consumption_logs', log.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<ConsumptionLog>> getConsumptionLogs(String productId,
+      {int days = 30}) async {
+    final db = await database;
+    final since =
+        DateTime.now().subtract(Duration(days: days)).toIso8601String();
+    final maps = await db.query(
+      'consumption_logs',
+      where: 'productId = ? AND timestamp >= ?',
+      whereArgs: [productId, since],
+      orderBy: 'timestamp DESC',
+    );
+    return maps.map((m) => ConsumptionLog.fromMap(m)).toList();
+  }
+
+  Future<double> getAverageDailyConsumption(String productId,
+      {int days = 30}) async {
+    final db = await database;
+    final since =
+        DateTime.now().subtract(Duration(days: days)).toIso8601String();
+    final result = await db.rawQuery('''
+      SELECT COALESCE(SUM(quantity), 0) as total
+      FROM consumption_logs
+      WHERE productId = ? AND timestamp >= ?
+    ''', [productId, since]);
+
+    final totalConsumed = (result.first['total'] as num?)?.toDouble() ?? 0;
+    return totalConsumed / days;
+  }
+
+  Future<double?> estimateDaysUntilEmpty(
+      String productId, double currentStock) async {
+    final avgDaily = await getAverageDailyConsumption(productId);
+    if (avgDaily <= 0) return null;
+    return currentStock / avgDaily;
+  }
+
+  // ==================== SPENDING BY CATEGORY ====================
+
+  Future<Map<String, double>> getSpendingByCategory(
+      int year, int month) async {
+    final db = await database;
+    final results = await db.rawQuery('''
+      SELECT si.categoryId, SUM(
+        CASE WHEN si.actualPrice IS NOT NULL
+          THEN si.actualPrice * si.quantity
+          ELSE COALESCE(si.estimatedPrice, 0) * si.quantity
+        END
+      ) as total
+      FROM shopping_items si
+      INNER JOIN shopping_lists sl ON si.shoppingListId = sl.id
+      WHERE sl.status = 'completed'
+        AND sl.completedAt IS NOT NULL
+        AND CAST(strftime('%Y', sl.completedAt) AS INTEGER) = ?
+        AND CAST(strftime('%m', sl.completedAt) AS INTEGER) = ?
+        AND si.isPurchased = 1
+      GROUP BY si.categoryId
+    ''', [year, month]);
+
+    final map = <String, double>{};
+    for (final row in results) {
+      map[row['categoryId'] as String] =
+          (row['total'] as num?)?.toDouble() ?? 0;
+    }
+    return map;
+  }
+
   // ==================== STATISTICS ====================
 
   Future<Map<String, dynamic>> getStats() async {
@@ -318,5 +503,95 @@ class DatabaseService {
       'outOfStockCount': outOfStock['count'],
       'activeListsCount': activeLists['count'],
     };
+  }
+
+  // ==================== PRICE HISTORY ====================
+
+  Future<void> insertPriceRecord(PriceRecord record) async {
+    final db = await database;
+    await db.insert('price_history', record.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<PriceRecord>> getPriceHistory(String productId,
+      {int limit = 20}) async {
+    final db = await database;
+    final maps = await db.query(
+      'price_history',
+      where: 'productId = ?',
+      whereArgs: [productId],
+      orderBy: 'date DESC',
+      limit: limit,
+    );
+    return maps.map((m) => PriceRecord.fromMap(m)).toList();
+  }
+
+  Future<double?> getLatestPrice(String productId) async {
+    final db = await database;
+    final maps = await db.query(
+      'price_history',
+      where: 'productId = ?',
+      whereArgs: [productId],
+      orderBy: 'date DESC',
+      limit: 1,
+    );
+    if (maps.isEmpty) return null;
+    return (maps.first['price'] as num).toDouble();
+  }
+
+  // ==================== LIST TEMPLATES ====================
+
+  Future<List<ListTemplate>> getTemplates() async {
+    final db = await database;
+    final templateMaps =
+        await db.query('list_templates', orderBy: 'createdAt DESC');
+    final templates = <ListTemplate>[];
+
+    for (final map in templateMaps) {
+      final itemMaps = await db.query('template_items',
+          where: 'templateId = ?', whereArgs: [map['id']]);
+      final items = itemMaps.map((m) => TemplateItem.fromMap(m)).toList();
+      templates.add(ListTemplate.fromMap(map, items: items));
+    }
+    return templates;
+  }
+
+  Future<void> insertTemplate(ListTemplate template) async {
+    final db = await database;
+    await db.insert('list_templates', template.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+    for (final item in template.items) {
+      await db.insert('template_items', item.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  Future<void> deleteTemplate(String id) async {
+    final db = await database;
+    await db.delete('template_items',
+        where: 'templateId = ?', whereArgs: [id]);
+    await db.delete('list_templates', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<Map<String, double>> getPriceTrend(String productId,
+      {int months = 6}) async {
+    final db = await database;
+    final since = DateTime.now()
+        .subtract(Duration(days: months * 30))
+        .toIso8601String();
+    final results = await db.rawQuery('''
+      SELECT strftime('%Y-%m', date) as month, AVG(price) as avgPrice
+      FROM price_history
+      WHERE productId = ? AND date >= ?
+      GROUP BY strftime('%Y-%m', date)
+      ORDER BY month ASC
+    ''', [productId, since]);
+
+    final trend = <String, double>{};
+    for (final row in results) {
+      trend[row['month'] as String] =
+          (row['avgPrice'] as num).toDouble();
+    }
+    return trend;
   }
 }

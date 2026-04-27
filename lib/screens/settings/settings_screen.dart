@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../providers/theme_provider.dart';
 import '../../services/notification_service.dart';
 import '../../utils/app_theme.dart';
 import '../../utils/constants.dart';
@@ -14,7 +16,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
-  bool _darkMode = false;
+  ShoppingReminder _reminder = const ShoppingReminder();
 
   @override
   void initState() {
@@ -24,14 +26,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
+    final notifService = NotificationService();
+    final reminder = await notifService.getShoppingReminder();
     setState(() {
       _notificationsEnabled = prefs.getBool('notifications_enabled') ?? true;
-      _darkMode = prefs.getBool('dark_mode') ?? false;
+      _reminder = reminder;
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
+
     return Scaffold(
       appBar: AppBar(title: const Text('Ajustes')),
       body: ListView(
@@ -51,14 +57,70 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SwitchListTile(
             title: const Text('Modo oscuro'),
             subtitle: const Text('Tema oscuro para la aplicacion'),
-            value: _darkMode,
-            onChanged: (value) async {
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setBool('dark_mode', value);
-              setState(() => _darkMode = value);
-            },
+            value: themeProvider.isDarkMode,
+            onChanged: (value) => themeProvider.toggleDarkMode(value),
             secondary: const Icon(Icons.dark_mode),
           ),
+          const Divider(),
+          const _SectionHeader(title: 'Recordatorio de Compras'),
+          SwitchListTile(
+            title: const Text('Recordatorio semanal'),
+            subtitle: Text(_reminder.enabled
+                ? '${_reminder.dayName} a las ${_reminder.timeString}'
+                : 'Recibir un aviso semanal para hacer compras'),
+            value: _reminder.enabled,
+            onChanged: _notificationsEnabled
+                ? (value) => _updateReminder(
+                    ShoppingReminder(
+                      enabled: value,
+                      dayOfWeek: _reminder.dayOfWeek,
+                      hour: _reminder.hour,
+                      minute: _reminder.minute,
+                    ),
+                  )
+                : null,
+            secondary: const Icon(Icons.alarm),
+          ),
+          if (_reminder.enabled) ...[
+            ListTile(
+              leading: const SizedBox(width: 24),
+              title: const Text('Dia de la semana'),
+              trailing: DropdownButton<int>(
+                value: _reminder.dayOfWeek,
+                underline: const SizedBox(),
+                items: const [
+                  DropdownMenuItem(value: 1, child: Text('Lunes')),
+                  DropdownMenuItem(value: 2, child: Text('Martes')),
+                  DropdownMenuItem(value: 3, child: Text('Miercoles')),
+                  DropdownMenuItem(value: 4, child: Text('Jueves')),
+                  DropdownMenuItem(value: 5, child: Text('Viernes')),
+                  DropdownMenuItem(value: 6, child: Text('Sabado')),
+                  DropdownMenuItem(value: 7, child: Text('Domingo')),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    _updateReminder(ShoppingReminder(
+                      enabled: true,
+                      dayOfWeek: value,
+                      hour: _reminder.hour,
+                      minute: _reminder.minute,
+                    ));
+                  }
+                },
+              ),
+            ),
+            ListTile(
+              leading: const SizedBox(width: 24),
+              title: const Text('Hora'),
+              trailing: TextButton(
+                onPressed: () => _pickTime(context),
+                child: Text(
+                  _reminder.timeString,
+                  style: const TextStyle(fontSize: 16),
+                ),
+              ),
+            ),
+          ],
           const Divider(),
           const _SectionHeader(title: 'Datos'),
           ListTile(
@@ -86,6 +148,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _pickTime(BuildContext context) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _reminder.timeOfDay,
+    );
+    if (picked != null) {
+      _updateReminder(ShoppingReminder(
+        enabled: true,
+        dayOfWeek: _reminder.dayOfWeek,
+        hour: picked.hour,
+        minute: picked.minute,
+      ));
+    }
+  }
+
+  Future<void> _updateReminder(ShoppingReminder reminder) async {
+    final notifService = NotificationService();
+    await notifService.saveShoppingReminder(reminder);
+    setState(() => _reminder = reminder);
   }
 }
 

@@ -47,7 +47,18 @@ app.*.map.json
 /ios/.symlinks/
 /ios/Flutter/Flutter.framework
 /ios/Flutter/Flutter.podspec
+/ios/Flutter/Generated.xcconfig
+/ios/Flutter/flutter_export_environment.sh
+/ios/Runner/GeneratedPluginRegistrant.h
+/ios/Runner/GeneratedPluginRegistrant.m
 
 # Environment
 .env
 *.env
+
+# Native build artifacts (machine specific)
+/android/local.properties
+/android/.gradle/
+/android/gradle-app.setting
+/android/gradle/**/caches
+

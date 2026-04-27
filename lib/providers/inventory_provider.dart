@@ -1,14 +1,22 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' hide Category;
 import 'package:uuid/uuid.dart';
 import '../models/product.dart';
 import '../models/category.dart';
+import '../models/consumption_log.dart';
+import '../models/price_record.dart';
 import '../services/database_service.dart';
 import '../services/notification_service.dart';
 
 class InventoryProvider extends ChangeNotifier {
-  final DatabaseService _db = DatabaseService();
-  final NotificationService _notifications = NotificationService();
+  final DatabaseService _db;
+  final NotificationService _notifications;
   final Uuid _uuid = const Uuid();
+
+  InventoryProvider({
+    DatabaseService? db,
+    NotificationService? notifications,
+  })  : _db = db ?? DatabaseService(),
+        _notifications = notifications ?? NotificationService();
 
   List<Product> _products = [];
   List<Category> _categories = [];
@@ -107,6 +115,23 @@ class InventoryProvider extends ChangeNotifier {
     final product = _products.firstWhere((p) => p.id == productId);
     final newStock = (product.currentStock - amount).clamp(0.0, double.infinity);
     await updateStock(productId, newStock);
+
+    // Log consumption for prediction
+    final log = ConsumptionLog(
+      id: _uuid.v4(),
+      productId: productId,
+      quantity: amount,
+    );
+    await _db.insertConsumptionLog(log);
+  }
+
+  Future<double?> getEstimatedDaysUntilEmpty(String productId) async {
+    final product = _products.firstWhere((p) => p.id == productId);
+    return _db.estimateDaysUntilEmpty(productId, product.currentStock);
+  }
+
+  Future<double> getAverageDailyConsumption(String productId) async {
+    return _db.getAverageDailyConsumption(productId);
   }
 
   Future<void> deleteProduct(String productId) async {
@@ -154,6 +179,32 @@ class InventoryProvider extends ChangeNotifier {
     if (lowStock.isNotEmpty) {
       await _notifications.showLowStockNotification(lowStock);
     }
+  }
+
+  /// Records a price and optionally auto-updates the product's estimatedPrice.
+  Future<void> recordPrice(String productId, double price,
+      {String source = 'manual', bool updateEstimated = true}) async {
+    final record = PriceRecord(
+      id: _uuid.v4(),
+      productId: productId,
+      price: price,
+      source: source,
+    );
+    await _db.insertPriceRecord(record);
+
+    if (updateEstimated) {
+      final idx = _products.indexWhere((p) => p.id == productId);
+      if (idx != -1) {
+        final updated = _products[idx].copyWith(estimatedPrice: price);
+        await _db.updateProduct(updated);
+        _products[idx] = updated;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<List<PriceRecord>> getPriceHistory(String productId) async {
+    return _db.getPriceHistory(productId);
   }
 
   List<Product> searchProducts(String query) {
