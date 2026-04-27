@@ -145,6 +145,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: const Text('Descripcion'),
             subtitle: const Text(AppConstants.appDescription),
           ),
+          const Divider(),
+          const SizedBox(height: 16),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 24),
+              child: Text(
+                'Desarrollado por Felipe Martínez',
+                style: TextStyle(
+                  color: Colors.grey[500],
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
