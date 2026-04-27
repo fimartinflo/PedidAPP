@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../models/product.dart';
@@ -21,6 +22,7 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen> {
   final TextEditingController _listNameController = TextEditingController();
 
   File? _imageFile;
+  File? _pdfFile;
   ReceiptParseResult? _result;
   bool _isProcessing = false;
   String? _error;
@@ -73,6 +75,45 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen> {
       setState(() {
         _isProcessing = false;
         _error = 'Error al procesar la imagen: $e';
+      });
+    }
+  }
+
+  Future<void> _pickPdf() async {
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
+      if (result == null || result.files.single.path == null) return;
+
+      setState(() {
+        _pdfFile = File(result.files.single.path!);
+        _imageFile = null;
+        _isProcessing = true;
+        _error = null;
+        _result = null;
+      });
+
+      final parseResult = await _parser.parsePdfReceipt(_pdfFile!);
+
+      setState(() {
+        _result = parseResult;
+        _editableItems = List.from(parseResult.items);
+        _selectedItems = List.filled(parseResult.items.length, true);
+        _isProcessing = false;
+      });
+
+      if (parseResult.items.isEmpty) {
+        setState(() {
+          _error = 'No se encontraron productos en el PDF. '
+              'Intenta con otro archivo o agrega items manualmente.';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isProcessing = false;
+        _error = 'Error al procesar el PDF: $e';
       });
     }
   }
@@ -144,8 +185,8 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Toma una foto de tu boleta o selecciona una imagen '
-              'para crear una lista de compras automaticamente.',
+              'Toma una foto, selecciona una imagen o abre un PDF '
+              'de tu boleta para crear una lista automaticamente.',
               style: TextStyle(color: Colors.grey[600]),
               textAlign: TextAlign.center,
             ),
@@ -171,19 +212,25 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen> {
               ),
             ],
             const SizedBox(height: 32),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 16,
+              runSpacing: 16,
               children: [
                 _ImageSourceButton(
                   icon: Icons.camera_alt,
                   label: 'Camara',
                   onTap: () => _pickImage(ImageSource.camera),
                 ),
-                const SizedBox(width: 24),
                 _ImageSourceButton(
                   icon: Icons.photo_library,
                   label: 'Galeria',
                   onTap: () => _pickImage(ImageSource.gallery),
+                ),
+                _ImageSourceButton(
+                  icon: Icons.picture_as_pdf,
+                  label: 'PDF',
+                  onTap: _pickPdf,
                 ),
               ],
             ),
@@ -198,8 +245,8 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen> {
 
     return Column(
       children: [
-        // Image preview
-        if (_imageFile != null)
+        // Source preview
+        if (_imageFile != null || _pdfFile != null)
           Container(
             height: 120,
             width: double.infinity,
@@ -207,7 +254,20 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen> {
             child: Stack(
               children: [
                 Center(
-                  child: Image.file(_imageFile!, height: 120, fit: BoxFit.cover),
+                  child: _imageFile != null
+                      ? Image.file(_imageFile!, height: 120, fit: BoxFit.cover)
+                      : Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.picture_as_pdf, size: 48, color: Colors.red),
+                            const SizedBox(height: 4),
+                            Text(
+                              _pdfFile!.path.split('/').last,
+                              style: const TextStyle(fontSize: 12),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
                 ),
                 Positioned(
                   right: 8,
@@ -216,10 +276,11 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen> {
                     onPressed: () => setState(() {
                       _result = null;
                       _imageFile = null;
+                      _pdfFile = null;
                       _error = null;
                     }),
                     icon: const Icon(Icons.refresh, size: 16),
-                    label: const Text('Otra foto'),
+                    label: Text(_imageFile != null ? 'Otra foto' : 'Otro archivo'),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
