@@ -12,13 +12,6 @@ subprojects {
 subprojects {
     project.evaluationDependsOn(":app")
 }
-subprojects {
-    afterEvaluate { project ->
-        if (project.hasProperty('android') && project.android.namespace == null) {
-            project.android.namespace = project.group.toString()
-        }
-    }
-}
 
 tasks.register("clean", Delete) {
     delete rootProject.buildDir

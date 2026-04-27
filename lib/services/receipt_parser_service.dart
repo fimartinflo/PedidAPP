@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
-import 'package:pdf_text_extract/pdf_text_extract.dart' show PDFDoc;
+import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 /// Represents a single item parsed from a receipt.
 class ReceiptItem {
@@ -260,8 +260,10 @@ class ReceiptParserService {
 
   /// Parses a PDF receipt file by extracting its text content.
   Future<ReceiptParseResult> parsePdfReceipt(File pdfFile) async {
-    final doc = await PDFDoc.fromFile(pdfFile);
-    final rawText = await doc.text;
+    final bytes = await pdfFile.readAsBytes();
+    final document = PdfDocument(inputBytes: bytes);
+    final rawText = PdfTextExtractor(document).extractText();
+    document.dispose();
 
     final lines = rawText.split('\n');
     final items = <ReceiptItem>[];
