@@ -251,4 +251,102 @@ class NotificationService {
   Future<void> cancelShoppingReminder() async {
     await _notifications.cancel(_reminderNotificationId);
   }
+
+  // ==================== EXPIRY NOTIFICATIONS ====================
+
+  /// Notification IDs for expiry start at 1000 + hash to avoid collisions
+  int _expiryNotificationId(String productId) =>
+      1000 + (productId.hashCode & 0x7FFFFFFF) % 100000;
+
+  /// Schedules a notification when a product is 3 days from expiry.
+  /// Currently uses immediate show if already within 3 days, since
+  /// flutter_local_notifications zonedSchedule requires timezone setup.
+  Future<void> scheduleExpiryNotification(Product product) async {
+    final enabled = await areNotificationsEnabled();
+    if (!enabled) return;
+    if (product.expiryDate == null) return;
+
+    final id = _expiryNotificationId(product.id);
+    await _notifications.cancel(id);
+
+    final days = product.daysUntilExpiry;
+    if (days == null) return;
+
+    // Only show immediate alert if expiring soon or expired
+    if (days < 0) {
+      await _showExpiryNotification(id, product, expired: true);
+    } else if (days <= 3) {
+      await _showExpiryNotification(id, product, expired: false);
+    }
+  }
+
+  Future<void> _showExpiryNotification(int id, Product product,
+      {required bool expired}) async {
+    const androidDetails = AndroidNotificationDetails(
+      'expiry_channel',
+      'Vencimientos',
+      channelDescription: 'Alertas de productos próximos a vencer',
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    final title = expired ? 'Producto Vencido' : 'Producto por Vencer';
+    final body = expired
+        ? '${product.name} ya está vencido'
+        : '${product.name} vence en ${product.daysUntilExpiry} día'
+            '${product.daysUntilExpiry == 1 ? '' : 's'}';
+
+    await _notifications.show(id, title, body, details);
+  }
+
+  /// Cancels any pending expiry notification for a product.
+  Future<void> cancelExpiryNotification(String productId) async {
+    await _notifications.cancel(_expiryNotificationId(productId));
+  }
+
+  /// Sends notifications for all products that are expiring soon (called on app start).
+  Future<void> checkAndNotifyExpiring(List<Product> products) async {
+    final enabled = await areNotificationsEnabled();
+    if (!enabled) return;
+
+    final expiringSoon = products
+        .where((p) => p.expiryDate != null && (p.isExpiringSoon || p.isExpired))
+        .toList();
+
+    if (expiringSoon.isEmpty) return;
+
+    final count = expiringSoon.length;
+    final names = expiringSoon.take(3).map((p) => p.name).join(', ');
+    final suffix = count > 3 ? ' y ${count - 3} más' : '';
+
+    const androidDetails = AndroidNotificationDetails(
+      'expiry_channel',
+      'Vencimientos',
+      channelDescription: 'Alertas de productos próximos a vencer',
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
+    );
+
+    const details = NotificationDetails(android: androidDetails);
+
+    await _notifications.show(
+      999,
+      'Productos próximos a vencer ($count)',
+      '$names$suffix',
+      details,
+    );
+  }
 }

@@ -32,7 +32,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -60,6 +60,7 @@ class DatabaseService {
         estimatedPrice REAL,
         notes TEXT,
         barcode TEXT,
+        expiryDate TEXT,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
         FOREIGN KEY (categoryId) REFERENCES categories(id)
@@ -123,6 +124,7 @@ class DatabaseService {
         price REAL NOT NULL,
         date TEXT NOT NULL,
         source TEXT,
+        store TEXT,
         FOREIGN KEY (productId) REFERENCES products(id) ON DELETE CASCADE
       )
     ''');
@@ -200,6 +202,10 @@ class DatabaseService {
           FOREIGN KEY (templateId) REFERENCES list_templates(id) ON DELETE CASCADE
         )
       ''');
+    }
+    if (oldVersion < 5) {
+      await db.execute('ALTER TABLE products ADD COLUMN expiryDate TEXT');
+      await db.execute('ALTER TABLE price_history ADD COLUMN store TEXT');
     }
   }
 

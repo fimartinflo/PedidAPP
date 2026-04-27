@@ -3,7 +3,8 @@ class PriceRecord {
   final String productId;
   final double price;
   final DateTime date;
-  final String? source; // 'manual', 'shopping_list', 'receipt'
+  final String? source;
+  final String? store;
 
   PriceRecord({
     required this.id,
@@ -11,6 +12,7 @@ class PriceRecord {
     required this.price,
     DateTime? date,
     this.source,
+    this.store,
   }) : date = date ?? DateTime.now();
 
   Map<String, dynamic> toMap() {
@@ -20,6 +22,7 @@ class PriceRecord {
       'price': price,
       'date': date.toIso8601String(),
       'source': source,
+      'store': store,
     };
   }
 
@@ -30,6 +33,7 @@ class PriceRecord {
       price: (map['price'] as num).toDouble(),
       date: DateTime.parse(map['date'] as String),
       source: map['source'] as String?,
+      store: map['store'] as String?,
     );
   }
 }

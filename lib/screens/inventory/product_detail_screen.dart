@@ -25,6 +25,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   late TextEditingController _notesController;
   String? _selectedCategoryId;
   String _selectedUnit = 'unidad';
+  DateTime? _expiryDate;
 
   @override
   void initState() {
@@ -58,6 +59,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     _notesController.text = product.notes ?? '';
     _selectedCategoryId = product.categoryId;
     _selectedUnit = product.unit;
+    _expiryDate = product.expiryDate;
   }
 
   @override
@@ -225,9 +227,50 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 subtitle: Text(product.notes!),
               ),
             ),
+          if (product.expiryDate != null) _buildExpiryCard(product),
           const SizedBox(height: 16),
           _buildPriceHistory(product, inventory),
+          const SizedBox(height: 16),
+          _buildPriceComparison(product, inventory),
         ],
+      ),
+    );
+  }
+
+  Widget _buildExpiryCard(product) {
+    final days = product.daysUntilExpiry as int;
+    final dateText = DateFormat('dd/MM/yyyy').format(product.expiryDate);
+    Color color;
+    String label;
+    IconData icon;
+
+    if (days < 0) {
+      color = AppTheme.errorColor;
+      label = 'Vencido hace ${-days} día${days == -1 ? '' : 's'}';
+      icon = Icons.warning;
+    } else if (days <= 3) {
+      color = AppTheme.errorColor;
+      label = days == 0 ? 'Vence hoy' : 'Vence en $days día${days == 1 ? '' : 's'}';
+      icon = Icons.warning_amber;
+    } else if (days <= 7) {
+      color = AppTheme.warningColor;
+      label = 'Vence en $days días';
+      icon = Icons.event;
+    } else {
+      color = AppTheme.successColor;
+      label = 'Vence en $days días';
+      icon = Icons.event;
+    }
+
+    return Card(
+      child: ListTile(
+        leading: Icon(icon, color: color),
+        title: const Text('Vencimiento'),
+        subtitle: Text(dateText),
+        trailing: Text(
+          label,
+          style: TextStyle(color: color, fontWeight: FontWeight.bold),
+        ),
       ),
     );
   }
@@ -329,7 +372,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           style: const TextStyle(
                               fontWeight: FontWeight.bold, fontSize: 15),
                         ),
-                        const Spacer(),
+                        const SizedBox(width: 8),
+                        if (record.store != null && record.store!.isNotEmpty)
+                          Expanded(
+                            child: Text(
+                              record.store!,
+                              style: TextStyle(
+                                  fontSize: 12, color: Colors.grey[700]),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          )
+                        else
+                          const Spacer(),
                         if (record.source != null)
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -353,6 +407,104 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   Text(
                     '${records.length - 5} registros mas...',
                     style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPriceComparison(product, InventoryProvider inventory) {
+    return FutureBuilder<Map<String, double>>(
+      future: inventory.getPriceComparisonByStore(product.id),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final byStore = snapshot.data!;
+        if (byStore.length < 2) {
+          // Only one store, no comparison
+          return const SizedBox.shrink();
+        }
+
+        final entries = byStore.entries.toList()
+          ..sort((a, b) => a.value.compareTo(b.value));
+        final cheapest = entries.first;
+        final mostExpensive = entries.last;
+        final savings = mostExpensive.value - cheapest.value;
+
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.compare_arrows,
+                        color: AppTheme.primaryColor),
+                    const SizedBox(width: 8),
+                    const Text('Comparador de Precios',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ...entries.map((e) {
+                  final isCheapest = e.key == cheapest.key;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.store,
+                          size: 18,
+                          color: isCheapest
+                              ? AppTheme.successColor
+                              : Colors.grey[600],
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            e.key,
+                            style: TextStyle(
+                              fontWeight: isCheapest
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '\$${e.value.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            color: isCheapest
+                                ? AppTheme.successColor
+                                : null,
+                          ),
+                        ),
+                        if (isCheapest) ...[
+                          const SizedBox(width: 6),
+                          const Icon(Icons.star,
+                              size: 16, color: AppTheme.successColor),
+                        ],
+                      ],
+                    ),
+                  );
+                }),
+                if (savings > 0) ...[
+                  const Divider(height: 24),
+                  Text(
+                    'Ahorro de hasta \$${savings.toStringAsFixed(2)} comprando en ${cheapest.key}',
+                    style: const TextStyle(
+                      color: AppTheme.successColor,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ],
@@ -541,6 +693,33 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               decoration: const InputDecoration(labelText: 'Notas'),
               maxLines: 2,
             ),
+            const SizedBox(height: 16),
+            InkWell(
+              onTap: _pickExpiryDate,
+              child: InputDecorator(
+                decoration: InputDecoration(
+                  labelText: 'Fecha de vencimiento',
+                  prefixIcon: const Icon(Icons.event),
+                  suffixIcon: _expiryDate != null
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 20),
+                          onPressed: () =>
+                              setState(() => _expiryDate = null),
+                        )
+                      : null,
+                ),
+                child: Text(
+                  _expiryDate != null
+                      ? DateFormat('dd/MM/yyyy').format(_expiryDate!)
+                      : 'Sin fecha',
+                  style: TextStyle(
+                    color: _expiryDate != null
+                        ? null
+                        : Theme.of(context).hintColor,
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(height: 24),
             Row(
               children: [
@@ -585,6 +764,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       notes: _notesController.text.trim().isEmpty
           ? null
           : _notesController.text.trim(),
+      expiryDate: _expiryDate,
+      clearExpiryDate: _expiryDate == null,
     );
 
     await inventory.updateProduct(updated);
@@ -594,6 +775,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Producto actualizado')),
       );
+    }
+  }
+
+  Future<void> _pickExpiryDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _expiryDate ?? now.add(const Duration(days: 7)),
+      firstDate: now.subtract(const Duration(days: 365)),
+      lastDate: now.add(const Duration(days: 365 * 5)),
+    );
+    if (picked != null) {
+      setState(() => _expiryDate = picked);
     }
   }
 
