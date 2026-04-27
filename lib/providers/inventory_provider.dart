@@ -66,6 +66,7 @@ class InventoryProvider extends ChangeNotifier {
     double? estimatedPrice,
     String? notes,
     String? barcode,
+    DateTime? expiryDate,
   }) async {
     final product = Product(
       id: _uuid.v4(),
@@ -77,11 +78,16 @@ class InventoryProvider extends ChangeNotifier {
       estimatedPrice: estimatedPrice,
       notes: notes,
       barcode: barcode,
+      expiryDate: expiryDate,
     );
 
     await _db.insertProduct(product);
     _products.add(product);
     notifyListeners();
+
+    if (expiryDate != null) {
+      await _notifications.scheduleExpiryNotification(product);
+    }
   }
 
   Future<void> updateProduct(Product product) async {
@@ -90,6 +96,12 @@ class InventoryProvider extends ChangeNotifier {
     if (index != -1) {
       _products[index] = product;
       notifyListeners();
+    }
+
+    if (product.expiryDate != null) {
+      await _notifications.scheduleExpiryNotification(product);
+    } else {
+      await _notifications.cancelExpiryNotification(product.id);
     }
   }
 
@@ -183,12 +195,15 @@ class InventoryProvider extends ChangeNotifier {
 
   /// Records a price and optionally auto-updates the product's estimatedPrice.
   Future<void> recordPrice(String productId, double price,
-      {String source = 'manual', bool updateEstimated = true}) async {
+      {String source = 'manual',
+      String? store,
+      bool updateEstimated = true}) async {
     final record = PriceRecord(
       id: _uuid.v4(),
       productId: productId,
       price: price,
       source: source,
+      store: store,
     );
     await _db.insertPriceRecord(record);
 
@@ -207,10 +222,93 @@ class InventoryProvider extends ChangeNotifier {
     return _db.getPriceHistory(productId);
   }
 
+  /// Returns price comparison by store: { storeName -> latest price }
+  /// for a specific product.
+  Future<Map<String, double>> getPriceComparisonByStore(
+      String productId) async {
+    final records = await _db.getPriceHistory(productId, limit: 100);
+    final byStore = <String, PriceRecord>{};
+    for (final r in records) {
+      final store = r.store?.trim();
+      if (store == null || store.isEmpty) continue;
+      final existing = byStore[store];
+      if (existing == null || r.date.isAfter(existing.date)) {
+        byStore[store] = r;
+      }
+    }
+    return byStore.map((k, v) => MapEntry(k, v.price));
+  }
+
+  /// Products that are expiring within the given days, ordered by closeness.
+  List<Product> get expiringSoonProducts {
+    final list = _products.where((p) {
+      final days = p.daysUntilExpiry;
+      return days != null && days >= 0 && days <= 7;
+    }).toList();
+    list.sort((a, b) =>
+        (a.daysUntilExpiry ?? 999).compareTo(b.daysUntilExpiry ?? 999));
+    return list;
+  }
+
+  List<Product> get expiredProducts =>
+      _products.where((p) => p.isExpired).toList();
+
+  /// Generates smart shopping list suggestions based on consumption patterns.
+  /// Suggests products that are running out and have history of consumption.
+  Future<List<SmartSuggestion>> getSmartSuggestions() async {
+    final suggestions = <SmartSuggestion>[];
+
+    for (final product in _products) {
+      if (product.isOutOfStock) {
+        suggestions.add(SmartSuggestion(
+          product: product,
+          reason: 'Sin stock',
+          priority: 3,
+        ));
+        continue;
+      }
+
+      final daysUntilEmpty =
+          await _db.estimateDaysUntilEmpty(product.id, product.currentStock);
+
+      if (daysUntilEmpty != null && daysUntilEmpty <= 5) {
+        suggestions.add(SmartSuggestion(
+          product: product,
+          reason: daysUntilEmpty < 1
+              ? 'Se agota hoy'
+              : 'Se agota en ${daysUntilEmpty.toStringAsFixed(0)} día'
+                  '${daysUntilEmpty < 2 ? '' : 's'}',
+          priority: daysUntilEmpty < 2 ? 2 : 1,
+        ));
+      } else if (product.isLowStock && daysUntilEmpty == null) {
+        suggestions.add(SmartSuggestion(
+          product: product,
+          reason: 'Stock bajo',
+          priority: 1,
+        ));
+      }
+    }
+
+    suggestions.sort((a, b) => b.priority.compareTo(a.priority));
+    return suggestions;
+  }
+
   List<Product> searchProducts(String query) {
     final lowerQuery = query.toLowerCase();
     return _products
         .where((p) => p.name.toLowerCase().contains(lowerQuery))
         .toList();
   }
+}
+
+class SmartSuggestion {
+  final Product product;
+  final String reason;
+  final int priority;
+
+  const SmartSuggestion({
+    required this.product,
+    required this.reason,
+    required this.priority,
+  });
 }

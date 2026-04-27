@@ -60,4 +60,19 @@ class FakeNotificationService extends NotificationService {
   Future<void> cancelShoppingReminder() async {
     calls.add('cancelShoppingReminder');
   }
+
+  @override
+  Future<void> scheduleExpiryNotification(Product product) async {
+    calls.add('scheduleExpiryNotification:${product.id}');
+  }
+
+  @override
+  Future<void> cancelExpiryNotification(String productId) async {
+    calls.add('cancelExpiryNotification:$productId');
+  }
+
+  @override
+  Future<void> checkAndNotifyExpiring(List<Product> products) async {
+    calls.add('checkAndNotifyExpiring:${products.length}');
+  }
 }

@@ -420,6 +420,7 @@ class ShoppingListDetailScreen extends StatelessWidget {
       0,
       (sum, item) => sum + item.totalActual,
     );
+    final storeController = TextEditingController();
 
     showDialog(
       context: context,
@@ -445,6 +446,17 @@ class ShoppingListDetailScreen extends StatelessWidget {
                 style: TextStyle(fontSize: 12, color: Colors.grey),
               ),
             ],
+            const SizedBox(height: 16),
+            TextField(
+              controller: storeController,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Tienda (opcional)',
+                hintText: 'Ej: Lider, Jumbo, Unimarc',
+                prefixIcon: Icon(Icons.store),
+                isDense: true,
+              ),
+            ),
           ],
         ),
         actions: [
@@ -454,6 +466,9 @@ class ShoppingListDetailScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () async {
+              final store = storeController.text.trim().isEmpty
+                  ? null
+                  : storeController.text.trim();
               // Update stock and record prices for purchased items
               final inventory = context.read<InventoryProvider>();
               for (final item in purchasedItems) {
@@ -466,6 +481,7 @@ class ShoppingListDetailScreen extends StatelessWidget {
                     item.productId,
                     pricePaid,
                     source: 'shopping_list',
+                    store: store,
                   );
                 }
               }
@@ -495,6 +511,6 @@ class ShoppingListDetailScreen extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ).then((_) => storeController.dispose());
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../providers/inventory_provider.dart';
 import '../../utils/app_theme.dart';
@@ -21,6 +22,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   String? _selectedCategoryId;
   String _selectedUnit = 'unidad';
+  DateTime? _expiryDate;
 
   @override
   void dispose() {
@@ -149,6 +151,33 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 maxLines: 2,
                 textCapitalization: TextCapitalization.sentences,
               ),
+              const SizedBox(height: 16),
+              InkWell(
+                onTap: _pickExpiryDate,
+                child: InputDecorator(
+                  decoration: InputDecoration(
+                    labelText: 'Fecha de vencimiento (opcional)',
+                    prefixIcon: const Icon(Icons.event),
+                    suffixIcon: _expiryDate != null
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 20),
+                            onPressed: () =>
+                                setState(() => _expiryDate = null),
+                          )
+                        : null,
+                  ),
+                  child: Text(
+                    _expiryDate != null
+                        ? DateFormat('dd/MM/yyyy').format(_expiryDate!)
+                        : 'Sin fecha',
+                    style: TextStyle(
+                      color: _expiryDate != null
+                          ? null
+                          : Theme.of(context).hintColor,
+                    ),
+                  ),
+                ),
+              ),
               const SizedBox(height: 24),
               ElevatedButton.icon(
                 onPressed: _saveProduct,
@@ -182,6 +211,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
       notes: _notesController.text.trim().isEmpty
           ? null
           : _notesController.text.trim(),
+      expiryDate: _expiryDate,
     );
 
     if (mounted) {
@@ -189,6 +219,19 @@ class _AddProductScreenState extends State<AddProductScreen> {
         const SnackBar(content: Text('Producto agregado exitosamente')),
       );
       Navigator.pop(context);
+    }
+  }
+
+  Future<void> _pickExpiryDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _expiryDate ?? now.add(const Duration(days: 7)),
+      firstDate: now.subtract(const Duration(days: 365)),
+      lastDate: now.add(const Duration(days: 365 * 5)),
+    );
+    if (picked != null) {
+      setState(() => _expiryDate = picked);
     }
   }
 }

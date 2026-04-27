@@ -9,6 +9,8 @@ import '../../widgets/section_header.dart';
 import '../../widgets/stat_card.dart';
 import '../../widgets/stock_indicator.dart';
 import '../../widgets/global_search.dart';
+import '../../services/notification_service.dart';
+import '../../services/widget_service.dart';
 import '../inventory/inventory_screen.dart';
 import '../shopping_list/shopping_lists_screen.dart';
 import '../budget/budget_screen.dart';
@@ -50,6 +52,17 @@ class _HomeScreenState extends State<HomeScreen> {
       shopping.loadShoppingLists(),
       budget.loadBudgets(),
     ]);
+
+    // Notify about expiring products
+    await NotificationService().checkAndNotifyExpiring(inventory.products);
+
+    // Update Android home widget
+    await WidgetService.updateWidget(
+      totalProducts: inventory.totalProducts,
+      lowStockCount: inventory.lowStockCount,
+      expiringCount:
+          inventory.expiringSoonProducts.length + inventory.expiredProducts.length,
+    );
   }
 
   @override
@@ -139,8 +152,10 @@ class _DashboardView extends StatelessWidget {
               const SizedBox(height: 16),
               _buildStatsCards(context),
               const SizedBox(height: 24),
+              _buildExpiringSection(context),
               _buildLowStockSection(context),
               const SizedBox(height: 24),
+              _buildSmartSuggestionsSection(context),
               _buildActiveListsSection(context),
               const SizedBox(height: 24),
               _buildBudgetSection(context),
@@ -206,6 +221,120 @@ class _DashboardView extends StatelessWidget {
               ),
             ),
           ],
+        );
+      },
+    );
+  }
+
+  Widget _buildExpiringSection(BuildContext context) {
+    return Consumer<InventoryProvider>(
+      builder: (context, inventory, child) {
+        final expiring = inventory.expiringSoonProducts;
+        final expired = inventory.expiredProducts;
+        final all = [...expired, ...expiring];
+        if (all.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SectionHeader(title: 'Por Vencer'),
+            const SizedBox(height: 8),
+            ...all.take(5).map((product) {
+              final days = product.daysUntilExpiry ?? 0;
+              final isExpired = days < 0;
+              final color = isExpired || days <= 3
+                  ? AppTheme.errorColor
+                  : days <= 7
+                      ? AppTheme.warningColor
+                      : AppTheme.successColor;
+              final label = isExpired
+                  ? 'Vencido'
+                  : days == 0
+                      ? 'Hoy'
+                      : '$days día${days == 1 ? '' : 's'}';
+
+              return Card(
+                color: color.withAlpha(15),
+                child: ListTile(
+                  leading: Icon(
+                    isExpired ? Icons.warning : Icons.event,
+                    color: color,
+                  ),
+                  title: Text(product.name),
+                  subtitle: Text(
+                    'Stock: ${product.currentStock.toStringAsFixed(1)} ${product.unit}',
+                  ),
+                  trailing: Text(
+                    label,
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              );
+            }),
+            const SizedBox(height: 24),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSmartSuggestionsSection(BuildContext context) {
+    return Consumer<InventoryProvider>(
+      builder: (context, inventory, child) {
+        return FutureBuilder<List<SmartSuggestion>>(
+          future: inventory.getSmartSuggestions(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              return const SizedBox.shrink();
+            }
+
+            final suggestions = snapshot.data!;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SectionHeader(
+                  title: 'Sugerencias Inteligentes',
+                  actionLabel: 'Crear lista',
+                  actionIcon: Icons.auto_awesome,
+                  onAction: () async {
+                    final shopping = context.read<ShoppingListProvider>();
+                    final products =
+                        suggestions.map((s) => s.product).toList();
+                    await shopping.generateFromLowStock(
+                      products,
+                      name: 'Sugerencias del ${DateTime.now().day}/${DateTime.now().month}',
+                    );
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content:
+                              Text('Lista creada con sugerencias inteligentes'),
+                        ),
+                      );
+                    }
+                  },
+                ),
+                const SizedBox(height: 8),
+                ...suggestions.take(3).map((s) {
+                  return Card(
+                    child: ListTile(
+                      leading: const CircleAvatar(
+                        backgroundColor: AppTheme.accentColor,
+                        child: Icon(Icons.auto_awesome,
+                            color: Colors.white, size: 18),
+                      ),
+                      title: Text(s.product.name),
+                      subtitle: Text(s.reason),
+                    ),
+                  );
+                }),
+                const SizedBox(height: 24),
+              ],
+            );
+          },
         );
       },
     );

@@ -2,12 +2,13 @@ class Product {
   final String id;
   final String name;
   final String categoryId;
-  final String unit; // unidad, kg, litro, paquete, etc.
+  final String unit;
   final double currentStock;
   final double minimumStock;
   final double? estimatedPrice;
   final String? notes;
   final String? barcode;
+  final DateTime? expiryDate;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -21,6 +22,7 @@ class Product {
     this.estimatedPrice,
     this.notes,
     this.barcode,
+    this.expiryDate,
     DateTime? createdAt,
     DateTime? updatedAt,
   })  : createdAt = createdAt ?? DateTime.now(),
@@ -31,6 +33,25 @@ class Product {
 
   double get stockNeeded =>
       isLowStock ? (minimumStock - currentStock + minimumStock) : 0;
+
+  /// Days until expiry. Negative if already expired. Null if no date set.
+  int? get daysUntilExpiry {
+    if (expiryDate == null) return null;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final exp = DateTime(expiryDate!.year, expiryDate!.month, expiryDate!.day);
+    return exp.difference(today).inDays;
+  }
+
+  bool get isExpired {
+    final days = daysUntilExpiry;
+    return days != null && days < 0;
+  }
+
+  bool get isExpiringSoon {
+    final days = daysUntilExpiry;
+    return days != null && days >= 0 && days <= 3;
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -43,6 +64,7 @@ class Product {
       'estimatedPrice': estimatedPrice,
       'notes': notes,
       'barcode': barcode,
+      'expiryDate': expiryDate?.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };
@@ -59,6 +81,9 @@ class Product {
       estimatedPrice: (map['estimatedPrice'] as num?)?.toDouble(),
       notes: map['notes'] as String?,
       barcode: map['barcode'] as String?,
+      expiryDate: map['expiryDate'] != null
+          ? DateTime.parse(map['expiryDate'] as String)
+          : null,
       createdAt: DateTime.parse(map['createdAt'] as String),
       updatedAt: DateTime.parse(map['updatedAt'] as String),
     );
@@ -74,6 +99,8 @@ class Product {
     double? estimatedPrice,
     String? notes,
     String? barcode,
+    DateTime? expiryDate,
+    bool clearExpiryDate = false,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -87,6 +114,7 @@ class Product {
       estimatedPrice: estimatedPrice ?? this.estimatedPrice,
       notes: notes ?? this.notes,
       barcode: barcode ?? this.barcode,
+      expiryDate: clearExpiryDate ? null : (expiryDate ?? this.expiryDate),
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
     );
